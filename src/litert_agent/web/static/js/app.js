@@ -1,11 +1,19 @@
-// LiteRT Agent Web UI client
+// LiteRT Agent Web UI client — renders every page against the local agent API.
 const page = document.getElementById('main').dataset.page;
 const content = document.getElementById('content');
 
-async function api(path) {
-  const res = await fetch(path);
+async function api(path, options) {
+  const res = await fetch(path, options);
   if (!res.ok) throw new Error('API ' + res.status);
   return res.json();
+}
+
+async function post(path, body) {
+  return api(path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {}),
+  });
 }
 
 function esc(s) {
@@ -13,15 +21,22 @@ function esc(s) {
 }
 
 function badge(status) {
-  const cls = {COMPLETED:'ok', PASS:'ok', PENDING:'info', RUNNING:'info', FAILED:'danger', BLOCK:'danger', ASK:'warn'}[status] || 'info';
+  const cls = {COMPLETED:'ok', PASS:'ok', READY:'ok', RUNNING:'info', PENDING:'info',
+               IDLE:'info', FAILED:'danger', BLOCK:'danger', DENIED:'danger', ASK:'warn'}[status] || 'info';
   return '<span class="badge ' + cls + '">' + esc(status) + '</span>';
 }
 
 function card(title, body) {
   return '<div class="card"><h3>' + esc(title) + '</h3>' + body + '</div>';
 }
+
 function emptyState(msg) {
   return '<div class="card"><div class="loading">' + esc(msg) + '</div></div>';
+}
+
+function table(headers, rows) {
+  return '<table><tr>' + headers.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr>' +
+    rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</table>';
 }
 
 function sendChat() {
@@ -33,15 +48,57 @@ function sendChat() {
   input.value = '';
   box.insertAdjacentHTML('beforeend', '<div class="msg agent"><b>Agent:</b> <span class="loading">working…</span></div>');
   box.scrollTop = box.scrollHeight;
-  fetch('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: msg})})
-    .then(r => r.json())
+  post('/api/chat', {message: msg})
     .then(data => {
       box.lastElementChild.innerHTML = '<b>Agent:</b> ' + esc(data.reply);
       box.scrollTop = box.scrollHeight;
     })
     .catch(e => {
       box.lastElementChild.innerHTML = '<b>Agent:</b> <span class="error-text">Error: ' + esc(e.message) + '</span>';
+      box.scrollTop = box.scrollHeight;
     });
+}
+
+function createTask(ev) {
+  ev.preventDefault();
+  const goal = document.getElementById('task-goal').value.trim();
+  if (!goal) return;
+  post('/api/tasks', {goal: goal})
+    .then(() => { location.reload(); })
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function addJob(ev) {
+  ev.preventDefault();
+  const name = document.getElementById('job-name').value.trim();
+  const desc = document.getElementById('job-desc').value.trim();
+  if (!name || !desc) return;
+  post('/api/scheduler', {name: name, task_description: desc})
+    .then(() => { location.reload(); })
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function runJob(jobId) {
+  post('/api/scheduler/' + jobId + '/run')
+    .then(() => alert('Job queued for execution.'))
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function restoreCheckpoint(cpId) {
+  post('/api/checkpoints/' + cpId + '/restore')
+    .then(r => alert(r.restored ? 'Checkpoint restored.' : 'Checkpoint not found.'))
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function runDiagnostics() {
+  const box = document.getElementById('diag-box');
+  box.innerHTML = '<div class="loading">Running diagnostics…</div>';
+  api('/api/diagnostics')
+    .then(data => {
+      const rows = Object.entries(data.checks).map(([k, v]) => [esc(k), badge(String(v).startsWith('PASS') ? 'PASS' : String(v)) + ' <small>' + esc(v) + '</small>']);
+      box.innerHTML = card('Diagnostics', table(['Check', 'Result'], rows));
+    })
+    .catch(e => { box.innerHTML = emptyState('Error: ' + e.message); });
 }
 
 const renderers = {
@@ -49,7 +106,7 @@ const renderers = {
     const [status, health] = await Promise.all([api('/api/status'), api('/api/health')]);
     const r = health.resources;
     return '<div class="grid">' +
-      card('Agent', '<div class="metric">' + esc(status.started ? 'RUNNING' : 'IDLE') + '</div><small>autonomy level ' + status.autonomy_level + '</small>') +
+      card('Agent', '<div class="metric">' + esc(status.started ? 'RUNNING' : 'IDLE') + '</div><small>autonomy level ' + esc(status.autonomy_level) + '</small>') +
       card('Model (LiteRT-LM)', '<div class="metric">' + (health.model && health.model.checks && health.model.checks.model === 'READY' ? 'Ready' : 'Not detected') + '</div>') +
       card('CPU', '<div class="metric">' + r.cpu_percent + '%</div>') +
       card('Memory', '<div class="metric">' + r.memory.available_gb + ' GB<small> free of ' + r.memory.total_gb + ' GB</small></div>') +
@@ -63,49 +120,74 @@ const renderers = {
   },
   agent: async () => {
     const [status, health] = await Promise.all([api('/api/status'), api('/api/health')]);
-    return card('Agent', '<table>' +
-      '<tr><td>Name</td><td>' + esc(status.agent) + '</td></tr>' +
-      '<tr><td>State</td><td>' + esc(status.started ? 'RUNNING' : 'IDLE') + '</td></tr>' +
-      '<tr><td>Autonomy</td><td>level ' + status.autonomy_level + '</td></tr>' +
-      '<tr><td>Safe mode</td><td>' + esc(status.safe_mode) + '</td></tr>' +
-      '<tr><td>Offline</td><td>' + esc(status.offline_mode) + '</td></tr>' +
-      '<tr><td>Model</td><td>' + esc(status.model_provider) + ' (LiteRT-LM only)</td></tr>' +
-      '<tr><td>Health</td><td>' + esc((health.model && health.model.status) || 'UNKNOWN') + '</td></tr>' +
-      '</table>');
+    return card('Agent', table(['Property', 'Value'], [
+      ['Name', esc(status.agent)],
+      ['State', badge(status.started ? 'RUNNING' : 'IDLE')],
+      ['Autonomy level', esc(status.autonomy_level)],
+      ['Safe mode', esc(status.safe_mode)],
+      ['Offline mode', esc(status.offline_mode)],
+      ['Model provider', esc(status.model_provider) + ' (LiteRT-LM only)'],
+      ['Queue size', esc(status.queue_size)],
+      ['Health', esc((health.model && health.model.status) || 'UNKNOWN')],
+    ]));
   },
   tasks: async () => {
     const data = await api('/api/tasks');
-    if (!data.tasks.length) return emptyState('No tasks yet.');
-    let rows = data.tasks.map(t => '<tr><td>' + esc(t.id.slice(0,8)) + '</td><td>' + esc(t.description) + '</td><td>' + badge(t.status) + '</td><td>' + esc(t.created_at) + '</td></tr>').join('');
-    return card('Tasks', '<table><tr><th>ID</th><th>Goal</th><th>Status</th><th>Created</th></tr>' + rows + '</table>');
+    const form = card('New Task', '<form onsubmit="createTask(event)"><div style="display:flex;gap:8px">' +
+      '<input id="task-goal" placeholder="Describe the task for the agent..." style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">' +
+      '<button type="submit">Create</button></div></form>');
+    if (!data.tasks.length) return form + emptyState('No tasks yet.');
+    const rows = data.tasks.map(t => [esc(t.id.slice(0, 8)), esc(t.description), badge(t.status), esc(t.created_at)]);
+    return form + card('Tasks', table(['ID', 'Goal', 'Status', 'Created'], rows));
+  },
+  scheduler: async () => {
+    const data = await api('/api/scheduler');
+    const form = card('Add Job', '<form onsubmit="addJob(event)">' +
+      '<input id="job-name" placeholder="Job name" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">' +
+      '<input id="job-desc" placeholder="Task description" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">' +
+      '<button type="submit">Add Job</button></form>');
+    if (!data.jobs.length) return form + emptyState('No scheduled jobs yet.');
+    const rows = data.jobs.map(j => [esc(j.id.slice(0, 8)), esc(j.name), esc(j.task_description), badge(j.status),
+      '<button class="ghost" onclick="runJob(\'' + j.id + '\')">Run Now</button>']);
+    return form + card('Jobs <small>queue: ' + data.queue_size + ' · worker: ' + (data.worker_running ? 'running' : 'idle') + '</small>',
+      table(['ID', 'Name', 'Task', 'Status', ''], rows));
+  },
+  workers: async () => {
+    const data = await api('/api/workers');
+    return '<div class="grid">' + data.workers.map(w =>
+      card(w.role, '<div class="metric">' + badge(w.status) + '</div>' +
+        '<small>completed: ' + esc(w.completed_jobs) + ' · queue: ' + esc(w.queue_size) + '</small>')
+    ).join('') + '</div>';
   },
   memory: async () => {
     const data = await api('/api/memory');
     if (!data.memories.length) return emptyState('No memories recorded yet.');
-    let rows = data.memories.map(m => '<tr><td>' + esc(m.category) + '</td><td>' + esc(m.content) + '</td><td>' + esc(m.importance) + '</td><td>' + esc(m.created_at) + '</td></tr>').join('');
-    return card('Memory', '<table><tr><th>Category</th><th>Content</th><th>Importance</th><th>Created</th></tr>' + rows + '</table>');
+    const rows = data.memories.map(m => [esc(m.category), esc(m.content), esc(m.importance), esc(m.created_at)]);
+    return card('Memory', table(['Category', 'Content', 'Importance', 'Created'], rows));
   },
   skills: async () => {
     const data = await api('/api/skills');
     return '<div class="grid">' + data.skills.map(s =>
-      card(s.name, esc(s.description) + '<br><small>tools: ' + esc((s.tools || []).join(', ')) + ' · v' + esc(s.version) + '</small><br>' + (s.enabled ? badge('COMPLETED').replace('COMPLETED','enabled') : badge('FAILED').replace('FAILED','disabled')))
+      card(s.name, esc(s.description) + '<br><small>tools: ' + esc((s.tools || []).join(', ')) + ' · v' + esc(s.version) + '</small><br>' + badge(s.enabled ? 'COMPLETED' : 'PENDING'))
     ).join('') + '</div>';
   },
   tools: async () => {
     const data = await api('/api/tools');
-    let rows = data.tools.map(t => '<tr><td>' + esc(t.name) + '</td><td>' + esc(t.description) + '</td><td>' + badge(t.permission_level) + '</td></tr>').join('');
-    return card('Tools', '<table><tr><th>Tool</th><th>Description</th><th>Permission</th></tr>' + rows + '</table>');
+    const rows = data.tools.map(t => [esc(t.name), esc(t.description), badge(t.permission_level)]);
+    return card('Tools', table(['Tool', 'Description', 'Permission'], rows));
   },
   approvals: async () => {
     const data = await api('/api/approvals');
     if (!data.approvals.length) return emptyState('No pending approvals.');
-    return data.approvals.map(a => card('Approval ' + esc(a.id.slice(0,8)), esc(a.tool) + '.' + esc(a.action) + ' ' + badge(a.status || 'ASK')));
+    return data.approvals.map(a => card('Approval ' + esc(String(a.id).slice(0, 8)),
+      esc(a.operation || a.description || '') + ' ' + badge(a.status || 'ASK'))).join('');
   },
   checkpoints: async () => {
     const data = await api('/api/checkpoints');
     if (!data.checkpoints.length) return emptyState('No checkpoints yet.');
-    let rows = data.checkpoints.map(c => '<tr><td>' + esc(c.id.slice(0,8)) + '</td><td>' + esc(c.description) + '</td><td>' + esc(c.created_at) + '</td></tr>').join('');
-    return card('Checkpoints', '<table><tr><th>ID</th><th>Description</th><th>Created</th></tr>' + rows + '</table>');
+    const rows = data.checkpoints.map(c => [esc(String(c.id).slice(0, 8)), esc(c.description || c.name || ''), esc(c.created_at),
+      '<button class="ghost" onclick="restoreCheckpoint(\'' + c.id + '\')">Restore</button>']);
+    return card('Checkpoints', table(['ID', 'Description', 'Created', ''], rows));
   },
   logs: async () => {
     const data = await api('/api/logs');
@@ -115,13 +197,18 @@ const renderers = {
   system: async () => {
     const data = await api('/api/system');
     const c = data.capabilities, r = data.resources;
-    let rows = [
+    const rows = [
       ['OS', c.os], ['Python', c.python_version], ['Git', c.has_git ? 'installed' : 'missing'],
       ['LiteRT-LM CLI', c.has_litert_lm ? 'installed' : 'missing'], ['Playwright', c.has_playwright ? 'installed' : 'missing'],
       ['CPU', r.cpu_percent + '%'], ['RAM', r.memory.used_percent + '% used'],
       ['Disk', r.disk.used_percent + '% used'],
-    ].map(x => '<tr><td>' + esc(x[0]) + '</td><td>' + esc(x[1]) + '</td></tr>').join('');
-    return card('System', '<table>' + rows + '</table>');
+    ].map(x => [esc(x[0]), esc(x[1])]);
+    return card('System', table(['Component', 'Status / Value'], rows));
+  },
+  diagnostics: async () => {
+    return card('Diagnostics', '<p>Run the built-in self-diagnostics: database, skills registry, model and runtime checks.</p>' +
+      '<button onclick="runDiagnostics()">Run Diagnostics</button>') +
+      '<div id="diag-box"></div>';
   },
   settings: async () => {
     const data = await api('/api/settings');
@@ -135,6 +222,7 @@ const renderers = {
   } catch (e) {
     content.innerHTML = emptyState('Error: ' + e.message);
   }
+  // websocket
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(proto + '://' + location.host + '/ws/events');
   ws.onopen = () => { document.getElementById('conn-dot').classList.add('on'); document.getElementById('conn-text').textContent = 'agent connected'; };
