@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from litert_agent.config import Config
 from litert_agent.environment.capabilities import Capabilities
@@ -19,7 +20,6 @@ from litert_agent.security.policy import SecurityPolicy
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.api.websocket import manager as ws_manager
 from litert_agent.api.schemas import TaskCreate, ApprovalDecision, SettingsUpdate
-from pydantic import BaseModel
 from litert_agent.api.runtime import get_runtime
 from litert_agent.web.pages import render_page
 
@@ -29,16 +29,16 @@ _STATIC_DIR = Path(__file__).parent.parent / "web" / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 # --- shared runtime services ---
-_config = Config()
+_config = Config.load()
 _db = DatabaseManager(_config.agent.home_dir / "agent.db")
 with sqlite3.connect(_db.db_path) as conn:
     conn.executescript(SCHEMA)
     conn.commit()
 _checkpoints = CheckpointManager(_db)
 _skills = SkillRegistry(_db)
-_policy = SecurityPolicy(safe_mode=_config.agent.safe_mode)
 
-APPROVALS: list[dict] = []
+PAGES = ("dashboard", "chat", "agent", "tasks", "memory", "skills", "tools",
+         "approvals", "checkpoints", "system", "settings", "logs")
 
 
 def _resource_snapshot() -> dict:
@@ -49,17 +49,12 @@ def _resource_snapshot() -> dict:
     }
 
 
-PAGES = ("dashboard", "chat", "agent", "tasks", "memory", "skills", "tools",
-         "approvals", "checkpoints", "system", "settings", "logs")
-
-
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return render_page("dashboard")
 
 
-@app.get("/{page}", response_class=HTMLRespon
-se)
+@app.get("/{page}", response_class=HTMLResponse)
 async def generic_page(page: str):
     if page in PAGES:
         return render_page(page)
@@ -76,8 +71,9 @@ async def status():
 @app.get("/api/health")
 async def health():
     runtime = await get_runtime()
-    return {"healthy": runtime.health().get("status") != "DEGRADED",
-            "model": runtime.health(), "resources": _resource_snapshot()}
+    health = runtime.health()
+    return {"healthy": health.get("status") != "DEGRADED",
+            "model": health, "resources": _resource_snapshot()}
 
 
 @app.get("/api/capabilities")
@@ -102,10 +98,21 @@ async def create_task(payload: TaskCreate):
         (task_id, "User Task", payload.goal, "PENDING", datetime.utcnow().isoformat()),
     )
     await ws_manager.broadcast({"type": "task_started", "payload": {"id": task_id, "goal": payload.goal}})
-    # run the task on the shared runtime (background)
     import asyncio
     asyncio.ensure_future(runtime.run_task(payload.goal))
     return {"id": task_id, "status": "RUNNING"}
+
+
+class ChatMessage(BaseModel):
+    message: str
+
+
+@app.post("/api/chat")
+async def chat(message: ChatMessage):
+    """Send a chat message; runs it as a task on the shared runtime."""
+    runtime = await get_runtime()
+    result = await runtime.run_task(message.message)
+    return {"reply": result}
 
 
 @app.get("/api/memory")
@@ -118,8 +125,7 @@ async def list_memory():
 
 @app.get("/api/skills")
 async def list_skills():
-    return {"skills": _skills.list_skill
-s()}
+    return {"skills": _skills.list_skills()}
 
 
 @app.get("/api/tools")
@@ -182,8 +188,7 @@ async def update_settings(update: SettingsUpdate):
     return {"status": "updated"}
 
 
-@app.websocket("/ws/e
-vents")
+@app.websocket("/ws/events")
 async def ws_events(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
