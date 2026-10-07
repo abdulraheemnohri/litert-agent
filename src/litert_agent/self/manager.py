@@ -9,6 +9,10 @@ import platform
 import sys
 import time
 from pathlib import Path
+from litert_agent.self.evolution import EvolutionManager
+from litert_agent.self.learning import LearningEngine
+from litert_agent.self.skills import SelfSkillManager
+from litert_agent.self.autonomy import AutonomousSelfController
 
 import psutil
 
@@ -24,6 +28,10 @@ class SelfManager:
         self.started_at = time.time()
         self.last_diagnostics: dict = {}
         self.last_reflection: dict = {}
+        self.evolution = EvolutionManager()
+        self.learning = None
+        self.self_skills = None
+        self.autonomy = AutonomousSelfController(self)
 
     def identity(self) -> dict:
         return {
@@ -124,6 +132,14 @@ class SelfManager:
         if not d["ok"]:
             actions.append({"action": "run_doctor", "reason": "diagnostic warnings present"})
         return actions
+
+    def initialize_learning(self):
+        if self.orchestrator:
+            self.learning = LearningEngine(self.orchestrator.memory, self.orchestrator.skill_registry, self.evolution)
+            self.self_skills = SelfSkillManager(self.orchestrator.skill_registry, self.orchestrator.skill_validator, self.evolution)
+
+    def self_cycle(self) -> dict:
+        return self.autonomy.tick()
 
     def snapshot(self) -> dict:
         return {
