@@ -9,6 +9,10 @@ import platform
 import sys
 import time
 from pathlib import Path
+from litert_agent.self.learning import LearningEngine
+from litert_agent.self.skills import SelfSkillEngine
+from litert_agent.self.autonomy import SelfAutonomyController, AutonomousPolicy
+from litert_agent.self.goals import SelfGoalManager
 
 import psutil
 
@@ -24,6 +28,10 @@ class SelfManager:
         self.started_at = time.time()
         self.last_diagnostics: dict = {}
         self.last_reflection: dict = {}
+        self.learning = LearningEngine()
+        self.skills = SelfSkillEngine()
+        self.goals = SelfGoalManager()
+        self.autonomy = SelfAutonomyController(self, self.learning, self.skills, AutonomousPolicy())
 
     def identity(self) -> dict:
         return {
@@ -133,6 +141,10 @@ class SelfManager:
             "diagnostics": self.last_diagnostics or self.diagnose(),
             "maintenance": self.maintenance_plan(),
             "uptime_seconds": round(time.time() - self.started_at, 2),
+            "learning": {"lessons": len(self.learning.lessons), "experiences": len(self.learning.experiences)},
+            "skills": {"proposals": len(self.skills.proposals)},
+            "autonomy": self.autonomy.status(),
+            "goals": {"total": len(self.goals.goals), "next": getattr(self.goals.next_goal(), "id", None)},
         }
 
     def export_snapshot(self, path: Path) -> Path:
