@@ -532,6 +532,21 @@ def self_diagnose(json_out: bool = typer.Option(False, "--json")):
     _print(data, json_out)
 
 
+@self_app.command("learn-web")
+def self_learn_web(url: str, lesson: str = typer.Option(..., "--lesson"), json_out: bool = typer.Option(False, "--json")):
+    """Fetch a web source and store a user-specified lesson as untrusted-source knowledge."""
+    runtime = AgentRuntime.get()
+    data = asyncio.run(runtime.orchestrator.self_manager.learn_from_web(url, lesson))
+    _print(data, json_out)
+
+
+@self_app.command("cycle")
+def self_cycle(json_out: bool = typer.Option(False, "--json")):
+    """Run one bounded self-maintenance planning cycle; no destructive action is auto-executed."""
+    data = AgentRuntime.get().orchestrator.self_manager.self_cycle()
+    _print(data, json_out)
+
+
 @self_app.command("maintenance")
 def self_maintenance(json_out: bool = typer.Option(False, "--json")):
     """Show safe maintenance proposals; no action is executed automatically."""
