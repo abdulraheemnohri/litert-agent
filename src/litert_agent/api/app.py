@@ -281,6 +281,32 @@ async def logs():
 
 
 
+
+@app.get("/api/self/learning")
+async def self_learning(query: str = ""):
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    return {"lessons": manager.learning.recall(query or "general"), "experiences": len(manager.learning.experiences)}
+
+@app.get("/api/self/skills")
+async def self_skills():
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    return {"skills": [p.__dict__ for p in manager.skills.list_proposals()]}
+
+@app.post("/api/self/autonomy/start")
+async def self_autonomy_start():
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.autonomy.policy.enabled = True
+    return manager.autonomy.start()
+
+@app.post("/api/self/autonomy/stop")
+async def self_autonomy_stop():
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    return manager.autonomy.stop()
+
 @app.get("/api/self")
 async def self_state():
     """Self-awareness snapshot and bounded maintenance proposals."""
