@@ -539,6 +539,35 @@ def self_maintenance(json_out: bool = typer.Option(False, "--json")):
     _print({"actions": data}, json_out)
 
 
+@self_app.command("autonomy-start")
+def self_autonomy_start():
+    """Start bounded self-autonomous maintenance/learning cycles."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    manager.autonomy.policy.enabled = True
+    _print(manager.autonomy.start(), False)
+
+
+@self_app.command("autonomy-stop")
+def self_autonomy_stop():
+    """Stop self-autonomous cycles safely."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(manager.autonomy.stop(), False)
+
+
+@self_app.command("learn")
+def self_learn(query: str = typer.Argument(...)):
+    """Recall validated lessons relevant to a task/query."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print({"lessons": manager.learning.recall(query)}, False)
+
+
+@self_app.command("skills")
+def self_skills():
+    """List self-generated skill proposals and their validation state."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print({"skills": [p.__dict__ for p in manager.skills.list_proposals()]}, False)
+
+
 @self_app.command("snapshot")
 def self_snapshot(path: str = typer.Option(None, "--path"), json_out: bool = typer.Option(False, "--json")):
     """Export a diagnostic/self-awareness snapshot to local storage."""
