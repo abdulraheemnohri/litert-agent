@@ -14,6 +14,8 @@ from litert_agent.self.learning import LearningEngine
 from litert_agent.self.skills import SelfSkillManager
 from litert_agent.self.autonomy import AutonomousSelfController
 from litert_agent.self.web_learning import WebLearningEngine
+from litert_agent.self.research import ResearchEngine
+from litert_agent.self.goals import GoalManager
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.skills.validator import SkillValidator
 
@@ -36,6 +38,8 @@ class SelfManager:
         self.self_skills = None
         self.autonomy = AutonomousSelfController(self)
         self.web_learning = None
+        self.research = None
+        self.goals = None
 
     def identity(self) -> dict:
         return {
@@ -143,6 +147,8 @@ class SelfManager:
             self.learning = LearningEngine(self.orchestrator.memory, registry, self.evolution)
             self.self_skills = SelfSkillManager(registry, SkillValidator, self.evolution)
             self.web_learning = WebLearningEngine(self.orchestrator.tool_registry.get("http"), self.orchestrator.memory)
+            self.research = ResearchEngine(self.orchestrator.memory.db_manager, self.orchestrator.tool_registry.get("http"), self.orchestrator.memory)
+            self.goals = GoalManager(self.orchestrator.memory.db_manager)
 
     async def learn(self, task_id, success, observation, lesson=""):
         if self.learning is None:
@@ -162,6 +168,32 @@ class SelfManager:
 
     def self_cycle(self):
         return self.autonomy.tick()
+
+    def research_mission(self, topic: str, goal: str, urls: list[str] | None = None):
+        if self.research is None:
+            self.initialize_learning()
+        return self.research.create_mission(topic, goal, urls)
+
+    async def research_source(self, mission_id: str, topic: str, url: str, claim: str, evidence: str = "", confidence: float = 0.5):
+        if self.research is None:
+            self.initialize_learning()
+        source = await self.research.fetch_source(url)
+        return await self.research.ingest_claim(mission_id, source, topic, claim, evidence or source.title, confidence)
+
+    def create_goal(self, title: str, description: str, priority: str = "NORMAL", parent_id: str | None = None, goal_type: str = "user"):
+        if self.goals is None:
+            self.initialize_learning()
+        return self.goals.create(title, description, priority, parent_id, goal_type)
+
+    def self_overview(self) -> dict:
+        if self.research is None or self.goals is None:
+            self.initialize_learning()
+        return {
+            "snapshot": self.snapshot(),
+            "research": {"missions": self.research.list_missions(), "sources": self.research.list_sources(), "findings": self.research.list_findings()},
+            "goals": self.goals.list(),
+            "curiosity": self.goals.pop_curiosity(),
+        }
 
 
     def snapshot(self) -> dict:
