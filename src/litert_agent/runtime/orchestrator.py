@@ -1,7 +1,5 @@
 """Central orchestrator for the Litert-Agent runtime."""
 
-from pathlib import Path
-
 from litert_agent.config import Config
 from litert_agent.environment.capabilities import Capabilities
 from litert_agent.model.litert_cli import LiteRTLMProvider
@@ -21,6 +19,7 @@ from litert_agent.security.audit import AuditLogger
 from litert_agent.cognition.executor import Executor
 from litert_agent.memory.manager import MemoryManager
 from litert_agent.recovery.checkpoints import CheckpointManager
+from litert_agent.recovery.crash_recovery import CrashRecovery
 from litert_agent.runtime.loop import AutonomousLoop
 from litert_agent.runtime.events import EventBus
 
@@ -41,7 +40,8 @@ class Orchestrator:
 
         self.policy = SecurityPolicy(safe_mode=self.config.agent.safe_mode)
         self.audit_logger = AuditLogger(self.config.agent.home_dir / "logs")
-        self.approval_manager = ApprovalManager(auto_approve=auto_approve, audit_logger=self.audit_logger)
+        self.approval_manager = ApprovalManager(auto_approve=auto_approve,
+                                                 audit_logger=self.audit_logger)
         self.executor = Executor(self.tool_registry, self.policy, self.approval_manager)
         self.memory = MemoryManager(self.config.agent.home_dir / "agent.db")
         self.event_bus = EventBus()
@@ -65,6 +65,7 @@ class Orchestrator:
         await self.model_provider.initialize()
         await self.memory.initialize()
         self.checkpoint_manager = CheckpointManager(self.memory.db_manager)
+        self.crash_recovery = CrashRecovery(self.memory.db_manager)
 
     async def run_task(self, goal: str) -> str:
         loop = AutonomousLoop(
@@ -74,5 +75,6 @@ class Orchestrator:
             self.event_bus,
             checkpoint_manager=getattr(self, "checkpoint_manager", None),
             audit_logger=self.audit_logger,
+            crash_recovery=getattr(self, "crash_recovery", None),
         )
         return await loop.run_task(goal)
