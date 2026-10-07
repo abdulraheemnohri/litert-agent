@@ -127,6 +127,32 @@ class LogsView(Log):
         self.write_line(f"{event.event_type}: {event.payload}")
 
 
+
+class SelfXView(Static):
+    def on_mount(self) -> None:
+        self.update(self.render_self())
+
+    def render_self(self) -> str:
+        manager = AgentRuntime.get().orchestrator.self_manager
+        manager.initialize_learning()
+        d = manager.diagnose()
+        goals = manager.goals.list(limit=8)
+        missions = manager.research.list_missions(limit=8)
+        sources = manager.research.list_sources(limit=8)
+        lines = [
+            "[b]SELF-X CONTROL CENTER[/b]",
+            f"Health: {'OK' if d['ok'] else 'WARN'}",
+            f"CPU: {d['resources']['cpu_percent']}%  RAM: {d['resources']['memory_percent']}%  Disk: {d['resources']['disk_percent']}%",
+            "",
+            "[b]Goals[/b]",
+        ]
+        lines += [f"  {g['priority']:<10} {g['status']:<10} {g['progress']*100:>5.1f}%  {g['title'][:60]}" for g in goals] or ["  none"]
+        lines += ["", "[b]Research Missions[/b]"]
+        lines += [f"  {m['status']:<10} {m['topic'][:55]}" for m in missions] or ["  none"]
+        lines += ["", f"[b]Sources[/b] {len(sources)} indexed"]
+        lines += ["[dim]Self-X never changes model weights, provider identity, or security policy automatically.[/dim]"]
+        return "\n".join(lines)
+
 class LiteRTTUIApp(App):
     """LiteRT Agent terminal application."""
 
@@ -143,6 +169,7 @@ class LiteRTTUIApp(App):
         ("s", "view_scheduler", "Scheduler"),
         ("a", "view_approvals", "Approvals"),
         ("l", "view_logs", "Logs"),
+        ("e", "view_self", "Self-X"),
         ("o", "decide_allow_once", "Allow once"),
         ("y", "decide_allow_session", "Allow session"),
         ("x", "decide_deny", "Deny"),
@@ -158,7 +185,7 @@ class LiteRTTUIApp(App):
                 yield Static(
                     "[b]LITERT AGENT[/b]\n\n"
                     " [b]D[/b] Dashboard\n [b]T[/b] Tasks\n [b]S[/b] Scheduler\n [b]A[/b] Approvals\n"
-                    " [b]L[/b] Logs\n\n"
+                    " [b]L[/b] Logs\n [b]E[/b] Self-X\n\n"
                     " [b]O/Y/X[/b] Decide approval\n\n"
                     " [b]P[/b] Pause agent\n [b]R[/b] Resume agent\n [b]Q[/b] Quit",
                     id="nav",
