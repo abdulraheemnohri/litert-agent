@@ -1,6 +1,7 @@
 """Main execution loop: OBSERVE -> THINK -> PLAN -> POLICY -> EXECUTE -> VERIFY -> REFLECT -> MEMORY -> REPLAN/COMPLETE."""
 
 import asyncio
+import hashlib
 
 from litert_agent.runtime.state import AgentState
 from litert_agent.model.provider import ModelProvider
@@ -18,7 +19,7 @@ from litert_agent.tools.base import ToolResult
 
 
 class AutonomousLoop:
-    """Cognition-integrated autonomous task loop."""
+    """Cognition-integrated autonomous task loop with crash-resume support."""
 
     def __init__(
         self,
@@ -28,6 +29,7 @@ class AutonomousLoop:
         event_bus: EventBus | None = None,
         checkpoint_manager=None,
         audit_logger=None,
+        crash_recovery=None,
         max_retries: int = 3,
     ):
         self.model_provider = model_provider
@@ -42,6 +44,7 @@ class AutonomousLoop:
         self.event_bus = event_bus or EventBus()
         self.checkpoint_manager = checkpoint_manager
         self.audit_logger = audit_logger
+        self.crash_recovery = crash_recovery
         self.state = AgentState()
 
     def _audit(self, event_type: str, tool: str, args: dict, result: str, permission: str = "ALLOW"):
@@ -51,15 +54,56 @@ class AutonomousLoop:
             except Exception:
                 pass
 
+    @staticmethod
+    def goal_key(goal: str) -> str:
+        """Stable snapshot key so a crashed run can be resumed by goal."""
+        return hashlib.sha1(goal.encode("utf-8")).hexdigest()[:16]
+
+    def _persist_progress(self, goal_key: str, observation: str, plan_steps: list[str]):
+        if self.crash_recovery is not None:
+            try:
+                self.crash_recovery.persist_state(
+                    goal_key, observation[:200], plan_steps, self.state.iteration_count
+                )
+            except Exception:
+                pass
+
+    def _clear_progress(self, goal_key: str):
+        if self.crash_recovery is not None:
+            try:
+                self.crash_recovery.clear_state(goal_key)
+            except Exception:
+                pass
+
     async def run_task(self, goal: str) -> str:
         self.state.status = "RUNNING"
         self.event_bus.publish(AgentEvent(event_type="task_started", payload={"goal": goal}))
 
         self.memory.working.add("user", goal)
 
-        # --- PLAN ---
-        plan_msg = self.planner.plan_message(goal)
-        plan_steps = plan_msg.plan_steps
+        goal_key = self.goal_key(goal)
+        resumed = None
+        if self.crash_recovery is not None:
+            try:
+                resumed = self.crash_recovery.load_state(goal_key)
+            except Exception:
+                resumed = None
+
+        if resumed:
+            # --- RESUME from crash snapshot ---
+            plan_steps = resumed.get("plan") or []
+            observation = "Resuming after restart: " + str(resumed.get("current_step") or goal)
+            self.state.iteration_count = int(resumed.get("iteration") or 0)
+            self.event_bus.publish(AgentEvent(event_type="task_resumed", payload={
+                "goal_key": goal_key, "iteration": self.state.iteration_count}))
+            self._audit("resume", "crash_recovery", {"goal": goal},
+                        "resumed at iteration {}".format(self.state.iteration_count), "ALLOW")
+        else:
+            # --- PLAN ---
+            plan_msg = self.planner.plan_message(goal)
+            plan_steps = plan_msg.plan_steps
+            observation = "Goal: " + goal
+
         self.event_bus.publish(AgentEvent(event_type="plan_created", payload={"steps": plan_steps}))
         self._audit("plan", "planner", {"goal": goal}, " | ".join(plan_steps), "ALLOW")
 
@@ -68,14 +112,13 @@ class AutonomousLoop:
         if self.checkpoint_manager is not None:
             self.checkpoint_manager.create_checkpoint(task_id, "task-start", {"goal": goal, "plan": plan_steps})
 
-        observation = f"Goal: {goal}"
         exec_results: list[ToolResult] = []
         failures = 0
 
         while self.state.is_running and self.state.iteration_count < self.state.max_iterations:
             self.state.iteration_count += 1
 
-            prompt = f"Observation: {observation}\nTask: {goal}\nRemaining plan: {plan_steps}"
+            prompt = "Observation: {}\nTask: {}\nRemaining plan: {}".format(observation, goal, plan_steps)
             msg: ProtocolMessage = await self.model_provider.generate(prompt)
 
             decision = self.decision_engine.decide(msg)
@@ -94,6 +137,7 @@ class AutonomousLoop:
                 await self.memory.tasks.update_task_status(task_id, "COMPLETED", msg.content)
                 self.event_bus.publish(AgentEvent(event_type="task_completed", payload={"task_id": task_id, "result": msg.content}))
                 self._audit("task_completed", "loop", {"goal": goal}, msg.content or "", "ALLOW")
+                self._clear_progress(goal_key)
                 self.state.status = "IDLE"
                 return msg.content or "Task completed successfully."
 
@@ -106,7 +150,7 @@ class AutonomousLoop:
                 self._audit("tool_call", tool_name, args, "requested", "ASK")
 
                 if self.checkpoint_manager is not None and tool_name in ("filesystem", "terminal", "git"):
-                    self.checkpoint_manager.create_checkpoint(task_id, f"before:{tool_name}.{action}", {"step": action})
+                    self.checkpoint_manager.create_checkpoint(task_id, "before:{}.{}".format(tool_name, action), {"step": action})
 
                 tool_res = await self.executor.execute_action(tool_name, action, args)
                 exec_results.append(tool_res)
@@ -118,25 +162,29 @@ class AutonomousLoop:
                 is_valid = self.verifier.verify_action(tool_res)
                 if is_valid:
                     observation = tool_res.output
-                    await self.memory.episodic.record_episode("execution", f"Tool {tool_name} output: {tool_res.output[:100]}")
+                    await self.memory.episodic.record_episode("execution", "Tool {} output: {}".format(tool_name, tool_res.output[:100]))
                     plan_steps = [s for s in plan_steps if tool_name not in s.lower()] or plan_steps
                 else:
                     failures += 1
-                    observation = f"Tool error: {tool_res.error}"
-                    await self.memory.lessons.add_lesson("tool_failure", f"Tool {tool_name} failed with {tool_res.error}")
-                    outcome = self.replanner.retry_or_escalate(f"{tool_name}.{action}", tool_res.error or "")
+                    observation = "Tool error: {}".format(tool_res.error)
+                    await self.memory.lessons.add_lesson("tool_failure", "Tool {} failed with {}".format(tool_name, tool_res.error))
+                    outcome = self.replanner.retry_or_escalate("{}.{}".format(tool_name, action), tool_res.error or "")
                     if outcome == "ESCALATE":
-                        await self.memory.tasks.update_task_status(task_id, "FAILED", f"Escalated after retries: {tool_res.error}")
+                        await self.memory.tasks.update_task_status(task_id, "FAILED", "Escalated after retries: {}".format(tool_res.error))
                         self.event_bus.publish(AgentEvent(event_type="task_failed", payload={"task_id": task_id, "error": tool_res.error}))
+                        self._clear_progress(goal_key)
                         self.state.status = "IDLE"
-                        return f"Task failed: {tool_res.error}"
-                    plan_steps = self.replanner.update_plan(plan_steps, f"{tool_name}.{action}")
+                        return "Task failed: {}".format(tool_res.error)
+                    plan_steps = self.replanner.update_plan(plan_steps, "{}.{}".format(tool_name, action))
 
             elif decision == "HANDLE_ERROR":
-                observation = f"Error encountered: {msg.content}"
+                observation = "Error encountered: {}".format(msg.content)
 
+            self._persist_progress(goal_key, observation, plan_steps)
             await asyncio.sleep(0.01)
 
+        # max iterations reached: keep the snapshot so a later run can resume
+        self._persist_progress(goal_key, observation, plan_steps)
         await self.memory.tasks.update_task_status(task_id, "FAILED", "Max iterations reached")
         self.event_bus.publish(AgentEvent(event_type="task_failed", payload={"task_id": task_id, "error": "max_iterations"}))
         self.state.status = "IDLE"
