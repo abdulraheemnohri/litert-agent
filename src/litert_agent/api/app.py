@@ -2,12 +2,13 @@
 
 import json
 import sqlite3
-from pathlib import Path
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from litert_agent.config import Config
 from litert_agent.environment.capabilities import Capabilities
@@ -18,14 +19,15 @@ from litert_agent.security.policy import SecurityPolicy
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.api.websocket import manager as ws_manager
 from litert_agent.api.schemas import TaskCreate, ApprovalDecision, SettingsUpdate
+from litert_agent.api.runtime import get_runtime
 from litert_agent.web.pages import render_page
-from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="LiteRT Agent API", version="0.1.0")
+
 _STATIC_DIR = Path(__file__).parent.parent / "web" / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-# --- shared runtime services (singletons) ---
+# --- shared runtime services ---
 _config = Config()
 _db = DatabaseManager(_config.agent.home_dir / "agent.db")
 with sqlite3.connect(_db.db_path) as conn:
@@ -46,7 +48,6 @@ def _resource_snapshot() -> dict:
     }
 
 
-# ---------- HTML pages ----------
 PAGES = ("dashboard", "tasks", "memory", "skills", "tools",
          "approvals", "checkpoints", "system", "settings", "logs")
 
@@ -66,23 +67,15 @@ async def generic_page(page: str):
 # ---------- API ----------
 @app.get("/api/status")
 async def status():
-    return {
-        "agent": _config.agent.name,
-        "status": "IDLE",
-        "autonomy_level": _config.agent.autonomy_level,
-        "safe_mode": _config.agent.safe_mode,
-        "offline_mode": _config.agent.offline_mode,
-    }
+    runtime = await get_runtime()
+    return runtime.status()
 
 
 @app.get("/api/health")
 async def health():
-    caps = Capabilities.discover()
-    return {
-        "healthy": True,
-        "model_detected": caps.has_litert_lm,
-        "resources": _resource_snapshot(),
-    }
+    runtime = await get_runtime()
+    return {"healthy": runtime.health().get("status") != "DEGRADED",
+            "model": runtime.health(), "resources": _resource_snapshot()}
 
 
 @app.get("/api/capabilities")
@@ -100,13 +93,17 @@ async def list_tasks():
 
 @app.post("/api/tasks")
 async def create_task(payload: TaskCreate):
+    runtime = await get_runtime()
     task_id = str(uuid.uuid4())
     _db.execute_write(
         "INSERT INTO tasks (id, title, description, status, created_at) VALUES (?, ?, ?, ?, ?)",
         (task_id, "User Task", payload.goal, "PENDING", datetime.utcnow().isoformat()),
     )
     await ws_manager.broadcast({"type": "task_started", "payload": {"id": task_id, "goal": payload.goal}})
-    return {"id": task_id, "status": "PENDING"}
+    # run the task on the shared runtime (background)
+    import asyncio
+    asyncio.ensure_future(runtime.run_task(payload.goal))
+    return {"id": task_id, "status": "RUNNING"}
 
 
 @app.get("/api/memory")
@@ -124,29 +121,22 @@ async def list_skills():
 
 @app.get("/api/tools")
 async def list_tools():
-    from litert_agent.tools.registry import ToolRegistry
-    from litert_agent.tools.terminal import TerminalTool
-    from litert_agent.tools.filesystem import FilesystemTool
-    from litert_agent.tools.python import PythonTool
-    from litert_agent.tools.git import GitTool
-    registry = ToolRegistry()
-    for tool in (TerminalTool(), FilesystemTool(), PythonTool(), GitTool()):
-        registry.register(tool)
-    return {"tools": registry.list_tools()}
+    runtime = await get_runtime()
+    return {"tools": runtime.orchestrator.tool_registry.list_tools()}
 
 
 @app.get("/api/approvals")
 async def list_approvals():
-    return {"approvals": APPROVALS}
+    runtime = await get_runtime()
+    return {"approvals": runtime.orchestrator.approval_manager.list_pending(),
+            "history": runtime.orchestrator.approval_manager.list_history()}
 
 
 @app.post("/api/approvals/{approval_id}/approve")
 async def approve(approval_id: str, decision: ApprovalDecision):
-    for approval in APPROVALS:
-        if approval["id"] == approval_id:
-            approval["status"] = "DENY" if decision.decision == "deny" else "ALLOW"
-            return approval
-    return {"error": "not found"}
+    runtime = await get_runtime()
+    result = runtime.orchestrator.approval_manager.decide(approval_id, decision.decision)
+    return result or {"error": "not found"}
 
 
 @app.get("/api/checkpoints")
