@@ -20,8 +20,7 @@ h1{font-size:22px;margin-bottom:16px}
 .metric{font-size:26px;font-weight:700}
 .metric small{color:var(--muted);font-size:12px;font-weight:400}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px s
-olid var(--border)}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
 th{color:var(--muted);font-weight:600}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
 .badge.ok{background:rgba(63,185,80,.15);color:var(--ok)}
@@ -41,3 +40,4 @@ button.danger{background:var(--danger)}
 .msg.user{background:rgba(79,143,247,.12);margin-left:15%}
 .msg.agent{background:rgba(63,185,80,.10);margin-right:15%}
 .msg.error{background:rgba(248,81,73,.12)}
+.error-text{color:var(--danger)}
