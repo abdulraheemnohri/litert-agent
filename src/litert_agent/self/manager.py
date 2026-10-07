@@ -13,6 +13,8 @@ from litert_agent.self.evolution import EvolutionManager
 from litert_agent.self.learning import LearningEngine
 from litert_agent.self.skills import SelfSkillManager
 from litert_agent.self.autonomy import AutonomousSelfController
+from litert_agent.skills.registry import SkillRegistry
+from litert_agent.skills.validator import SkillValidator
 
 import psutil
 
@@ -135,8 +137,9 @@ class SelfManager:
 
     def initialize_learning(self):
         if self.orchestrator:
-            self.learning = LearningEngine(self.orchestrator.memory, self.orchestrator.skill_registry, self.evolution)
-            self.self_skills = SelfSkillManager(self.orchestrator.skill_registry, self.orchestrator.skill_validator, self.evolution)
+            registry = SkillRegistry(self.orchestrator.memory.db_manager)
+            self.learning = LearningEngine(self.orchestrator.memory, registry, self.evolution)
+            self.self_skills = SelfSkillManager(registry, SkillValidator, self.evolution)
 
     def self_cycle(self) -> dict:
         return self.autonomy.tick()
