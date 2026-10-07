@@ -17,6 +17,16 @@
 - Crash recovery integrated into the autonomous loop: snapshots keyed by goal,
   resumed automatically after a restart, cleared on completion or hard failure
 - CI: GitHub Actions workflow (ruff lint + pytest + wheel build), `.gitignore`, ruff config
+- Examples: quickstart, chat via Web API, scheduler and approvals demos
+- Community/ops files: SECURITY.md, CODE_OF_CONDUCT.md, Makefile,
+  issue templates and pull request template
+- Scripts: dev setup and CI-equivalent check scripts
+- Docs: autonomy, memory, tools, scheduler and development guides
+
+### Fixed
+- Broken `th,td` CSS rule (newline inside `solid`) in the Web UI stylesheet
+- Scheduler worker: re-queuing released jobs no longer leaves an un-awaited coroutine
+- Committed `__pycache__` bytecode artifacts removed from the repository
 
 ## 0.1.0 — 2026-10-07
 
