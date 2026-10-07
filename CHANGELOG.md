@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Persisted scheduler jobs (`scheduler_jobs` SQLite table) shared by CLI and Web API
+- Real `litert-agent schedule list / add / remove / run` CLI commands
+- API: `POST /api/chat`, `GET /api/scheduler`, `POST /api/scheduler`, `POST /api/scheduler/{id}/run`,
+  `GET /api/workers`, `GET /api/diagnostics`
+- Web UI pages: Chat, Agent, Scheduler, Workers, Diagnostics; task creation and
+  checkpoint restore actions
+- Tests for scheduler queue registry and job worker lifecycle
+
+### Fixed
+- Broken `th,td` CSS rule (newline inside `solid`) in the Web UI stylesheet
+- Scheduler worker: re-queuing released jobs no longer leaves an un-awaited coroutine
+
 ## 0.1.0 — 2026-10-07
 
 ### Added
