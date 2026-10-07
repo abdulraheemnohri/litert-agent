@@ -15,6 +15,7 @@ class JobWorker:
         self.handler = handler
         self.running = False
         self.completed: list[str] = []
+        self.failed: list[str] = []
 
     async def start(self):
         self.running = True
@@ -28,6 +29,7 @@ class JobWorker:
                 self.completed.append(job.id)
                 job.status = result
             except Exception as exc:  # recover, never crash the worker
+                self.failed.append(job.id)
                 job.status = f"FAILED: {exc}"
 
     def stop(self):
@@ -46,5 +48,6 @@ class JobWorker:
         return result or "COMPLETED"
 
     def release_task(self, job: Job):
+        """Return a job to the queue (re-queue without duplicating history)."""
         job.status = "PENDING"
-        self.queue.enqueue(job)
+        self.queue.queue.put_nowait(job)
