@@ -16,7 +16,6 @@ from litert_agent.environment.capabilities import Capabilities
 from litert_agent.environment.resources import ResourceMonitor
 from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
 from litert_agent.recovery.checkpoints import CheckpointManager
-from litert_agent.scheduler.jobs import Job
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.api.websocket import manager as ws_manager
 from litert_agent.api.schemas import TaskCreate, ApprovalDecision, SettingsUpdate
@@ -31,8 +30,20 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 # --- shared runtime services ---
 _config = Config.load()
 _db = DatabaseManager(_config.agent.home_dir / "agent.db")
+SCHEDULER_TABLE = """
+CREATE TABLE IF NOT EXISTS scheduler_jobs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    task_description TEXT NOT NULL,
+    cron_or_interval TEXT DEFAULT '',
+    status TEXT DEFAULT 'PENDING',
+    created_at TEXT NOT NULL
+)
+"""
+
 with sqlite3.connect(_db.db_path) as conn:
     conn.executescript(SCHEMA)
+    conn.executescript(SCHEDULER_TABLE)
     conn.commit()
 _checkpoints = CheckpointManager(_db)
 _skills = SkillRegistry(_db)
@@ -55,7 +66,8 @@ async def index():
     return render_page("dashboard")
 
 
-@app.get("/{page}", response_class=HTMLResponse)
+@app.get("/{page}", response_class=HTMLRespon
+se)
 async def generic_page(page: str):
     if page in PAGES:
         return render_page(page)
@@ -119,7 +131,8 @@ async def chat(message: ChatMessage):
 @app.get("/api/memory")
 async def list_memory():
     rows = _db.execute_read(
-        "SELECT id, category, content, importance, created_at FROM memories ORDER BY created_at DESC LIMIT 100"
+        "SELECT id, category, content, importance, created_at FROM memories ORDER 
+BY created_at DESC LIMIT 100"
     )
 
     return {"memories": [{"id": r[0], "category": r[1], "content": r[2], "importance": r[3], "created_at": r[4]} for r in rows]}
@@ -153,9 +166,15 @@ async def approve(approval_id: str, decision: ApprovalDecision):
 # ---------- Scheduler ----------
 @app.get("/api/scheduler")
 async def scheduler_jobs():
+    """Persisted scheduler jobs (shared with the CLI) plus live queue info."""
     runtime = await get_runtime()
-    return {"jobs": [job.model_dump() for job in runtime.queue.list_jobs()],
-            "queue_size": runtime.queue.size(),
+    rows = _db.execute_read(
+        "SELECT id, name, task_description, cron_or_interval, status, created_at "
+        "FROM scheduler_jobs ORDER BY created_at DESC LIMIT 100"
+    )
+    jobs = [{"id": r[0], "name": r[1], "task_description": r[2],
+             "cron_or_interval": r[3], "status": r[4], "created_at": r[5]} for r in rows]
+    return {"jobs": jobs, "queue_size": runtime.queue.size(),
             "worker_running": runtime.worker.running}
 
 
@@ -167,25 +186,29 @@ class JobCreate(BaseModel):
 @app.post("/api/scheduler")
 async def scheduler_add(payload: JobCreate):
     runtime = await get_runtime()
-    job = Job(name=payload.name, task_description=payload.task_description)
-    await runtime.queue.enqueue(job)
+    job_id = str(uuid.uuid4())
+    _db.execute_write(
+        "INSERT INTO scheduler_jobs (id, name, task_description, cron_or_interval, status, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (job_id, payload.name, payload.task_description, "", "PENDING", datetime.utcnow().isoformat()),
+    )
     await ws_manager.broadcast({"type": "scheduler_event",
-                               "payload": {"job_id": job.id, "name": job.name, "event": "added"}})
-    return job.model_dump()
+                               "payload": {"job_id": job_id, "name": payload.name, "event": "added"}})
+    return {"id": job_id, "name": payload.name, "status": "PENDING"}
 
 
 @app.post("/api/scheduler/{job_id}/run")
 async def scheduler_run(job_id: str):
     runtime = await get_runtime()
-    job = runtime.queue.get_job(job_id)
-    if job is None:
+    rows = _db.execute_read("SELECT task_description FROM scheduler_jobs WHERE id = ?", (job_id,))
+    if not rows:
         return {"error": "not found"}
     import asyncio
-    job.status = "RUNNING"
-    asyncio.ensure_future(runtime.run_task(job.task_description))
+    _db.execute_write("UPDATE scheduler_jobs SET status = ? WHERE id = ?", ("RUNNING", job_id))
+    asyncio.ensure_future(runtime.run_task(rows[0][0]))
     await ws_manager.broadcast({"type": "scheduler_event",
-                               "payload": {"job_id": job.id, "name": job.name, "event": "run_now"}})
-    return {"id": job.id, "status": "RUNNING"}
+                               "payload": {"job_id": job_id, "event": "run_now"}})
+    return {"id": job_id, "status": "RUNNING"}
 
 
 # ---------- Workers ----------
@@ -233,7 +256,8 @@ async def diagnostics():
     except Exception as exc:
         checks["runtime"] = f"FAIL: {exc}"
 
-    healthy = all(v == "PASS" or v == "READY" for v in checks.values())
+    healthy = all(v == "PASS" or
+ v == "READY" for v in checks.values())
     return {"checks": checks, "healthy": healthy}
 
 
