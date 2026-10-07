@@ -19,14 +19,18 @@ A fully local-first autonomous AI agent built in Python. It plans, executes, ver
 | --- | --- |
 | `cognition` | Planner, decision, executor (policy + approvals), verifier, critic, reflector, replanner, prioritizer |
 | `runtime` | Integrated loop, orchestrator (10 tools), shared `AgentRuntime`, heartbeat supervisor, graceful shutdown |
+| `model` | LiteRT-LM provider, CLI adapter, discovery, parser, protocol, session |
 | `recovery` | Checkpoints, rollback, healer, crash recovery, replanner compatibility |
 | `skills` | Loader, registry, validator, 10 built-in skills |
 | `scheduler` | SQLite-backed job queue and worker (claim / execute / release, re-queue on failure) |
-| `security` | Tool policy and pending approvals with history (allow-once / allow-session / deny) |
+| `security` | Tool policy, permissions, approvals, sandbox, secrets, audit |
+| `memory` | Working, episodic, semantic, lessons, tasks — all SQLite-backed |
+| `agents` | Worker, delegation, roles (logical workers, one LiteRT-LM backend) |
+| `environment` | OS/platform detector, resources, capabilities |
 | `api` | FastAPI app with shared runtime, `/api/chat`, WebSocket, scheduler and worker endpoints |
 | `web` | 15-page web UI: chat, agent, tasks, approvals, scheduler, workers, diagnostics, checkpoints, and more |
 | `tui` | Full Textual TUI with rich fallback; scheduler view, approval keys, real pause/resume |
-| `tools` | Real grep-based search, HTTP client with offline-mode enforcement |
+| `tools` | Terminal, filesystem, python, git, browser (Playwright), http, search, archive, scheduler |
 
 ## Installation
 
@@ -35,7 +39,7 @@ Requires Python 3.12+.
 ```bash
 git clone https://github.com/abdulraheemnohri/litert-agent.git
 cd litert-agent
-pip install -e .
+pip install -e ".[dev]"        # or: make install / scripts/dev_setup.sh
 ```
 
 Make sure the LiteRT-LM CLI is installed and available on your `PATH`. litert-agent will not run without it — by design.
@@ -121,31 +125,41 @@ See `docs/configuration.md` for all options (loop, memory, scheduler, web).
 
 - `docs/architecture.md`
 - `docs/installation.md`
+- `docs/development.md`
 - `docs/cli.md`
-- `docs/web-ui.md`
 - `docs/tui.md`
+- `docs/web-ui.md`
+- `docs/autonomy.md`
+- `docs/memory.md`
+- `docs/tools.md`
+- `docs/skills.md`
+- `docs/scheduler.md`
 - `docs/security.md`
 - `docs/recovery.md`
-- `docs/skills.md`
 - `docs/runtime.md`
 - `docs/configuration.md`
 - `docs/troubleshooting.md`
 
+## Examples
+
+See `examples/` — quickstart, chat via the Web API, scheduler and approvals demos.
+
 ## Testing
 
 ```bash
-pytest
+pytest -q        # or: make test / scripts/check.sh
+ruff check src tests
 ```
 
-Unit tests cover cognition, recovery, skills, config, runtime service, chat API, scheduler, approvals, and crash-recovery integration. Integration tests cover the API and the full loop with a scripted fake provider.
+Unit tests cover cognition, recovery, skills, config, runtime service, chat API, scheduler, approvals, and crash-recovery integration. Integration tests cover the API and the full loop with a scripted fake provider. CI runs lint, tests and a wheel build on every push.
 
 ## Contributing
 
-See `CONTRIBUTING.md`. Conventional commits are required.
+See `CONTRIBUTING.md` and `SECURITY.md`. Conventional commits are required.
 
 ## License
 
-See the repository for license details.
+MIT — see `LICENSE`.
 
 ## Project Status
 
