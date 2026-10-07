@@ -59,6 +59,13 @@ class SelfConfig(BaseModel):
     max_concurrent_workers: int = 4
     snapshot_enabled: bool = True
     snapshot_interval_seconds: float = 900.0
+    research_enabled: bool = True
+    research_max_sources_per_mission: int = 5
+    research_max_content_chars: int = 200000
+    knowledge_stale_after_days: int = 30
+    curiosity_enabled: bool = True
+    autonomous_goal_generation: bool = False
+    skill_auto_registration: bool = False
 
 
 class Config(BaseModel):
