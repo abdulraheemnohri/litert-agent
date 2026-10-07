@@ -1,9 +1,11 @@
 """Terminal tool for command execution."""
 
 import asyncio
-from litert_agent.tools.base import BaseTool, ToolResult
-from litert_agent.security.permissions import PermissionLevel
+
 from litert_agent.environment.platform import PlatformInfo
+from litert_agent.security.permissions import PermissionLevel
+from litert_agent.tools.base import BaseTool, ToolResult
+
 
 class TerminalTool(BaseTool):
     name = "terminal"
@@ -33,7 +35,7 @@ class TerminalTool(BaseTool):
                 output=out_str if success else out_str + "\n" + err_str,
                 error=None if success else f"Exit code: {proc.returncode}"
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ToolResult(success=False, output="", error=f"Command timed out after {timeout} seconds")
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))

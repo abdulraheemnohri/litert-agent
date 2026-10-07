@@ -1,7 +1,7 @@
 """Background job worker with claim/execute/release lifecycle."""
 
 import asyncio
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from litert_agent.scheduler.jobs import Job
 from litert_agent.scheduler.queue import JobQueue
@@ -45,7 +45,9 @@ class JobWorker:
             job.status = "COMPLETED"
             return "COMPLETED"
         result = await self.handler(job)
-        return result or "COMPLETED"
+        res_str = result or "COMPLETED"
+        job.status = res_str
+        return res_str
 
     def release_task(self, job: Job):
         """Return a job to the queue (re-queue without duplicating history)."""

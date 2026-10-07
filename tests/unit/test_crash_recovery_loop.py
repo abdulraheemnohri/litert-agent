@@ -2,18 +2,18 @@
 
 import pytest
 
+from litert_agent.cognition.executor import Executor
 from litert_agent.memory.manager import MemoryManager
-from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
+from litert_agent.memory.sqlite import SCHEMA, DatabaseManager
 from litert_agent.model.protocol import ProtocolMessage
 from litert_agent.model.provider import ModelProvider
-from litert_agent.cognition.executor import Executor
-from litert_agent.tools.registry import ToolRegistry
-from litert_agent.tools.filesystem import FilesystemTool
-from litert_agent.security.policy import SecurityPolicy
-from litert_agent.security.approvals import ApprovalManager
-from litert_agent.runtime.loop import AutonomousLoop
 from litert_agent.recovery.crash_recovery import CrashRecovery
 from litert_agent.runtime.events import EventBus
+from litert_agent.runtime.loop import AutonomousLoop
+from litert_agent.security.approvals import ApprovalManager
+from litert_agent.security.policy import SecurityPolicy
+from litert_agent.tools.filesystem import FilesystemTool
+from litert_agent.tools.registry import ToolRegistry
 
 
 class FinalProvider(ModelProvider):

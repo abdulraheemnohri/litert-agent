@@ -1,8 +1,10 @@
 """Environment detector."""
 
 import sys
+
 from litert_agent.environment.platform import PlatformInfo
 from litert_agent.environment.resources import ResourceMonitor
+
 
 class EnvironmentDetector:
     @staticmethod

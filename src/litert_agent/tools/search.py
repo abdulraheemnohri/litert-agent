@@ -4,7 +4,7 @@ import asyncio
 import shutil
 from pathlib import Path
 
-from litert_agent.tools.base import ToolResult
+from litert_agent.tools.base import BaseTool, ToolResult
 
 
 class SearchTool(BaseTool):

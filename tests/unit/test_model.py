@@ -1,9 +1,10 @@
 """Unit tests for model subsystem."""
 
 import pytest
-from litert_agent.model.parser import ProtocolParser
-from litert_agent.model.protocol import ProtocolMessage
+
 from litert_agent.model.litert_cli import LiteRTLMProvider
+from litert_agent.model.parser import ProtocolParser
+
 
 def test_protocol_parser_json():
     json_str = '{"type": "tool_call", "tool": "terminal", "arguments": {"command": "ls"}}'

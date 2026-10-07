@@ -1,9 +1,10 @@
 """Process and Archive tools."""
 
-import shutil
 import zipfile
 from pathlib import Path
+
 from litert_agent.tools.base import BaseTool, ToolResult
+
 
 class ProcessTool(BaseTool):
     name = "process"

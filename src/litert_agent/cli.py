@@ -11,13 +11,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from litert_agent.runtime.service import AgentRuntime
-from litert_agent.environment.detector import EnvironmentDetector
-from litert_agent.environment.capabilities import Capabilities
-from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
-from litert_agent.skills.registry import SkillRegistry
-from litert_agent.recovery.checkpoints import CheckpointManager
 from litert_agent.config import Config
+from litert_agent.environment.capabilities import Capabilities
+from litert_agent.environment.detector import EnvironmentDetector
+from litert_agent.memory.sqlite import SCHEMA, DatabaseManager
+from litert_agent.recovery.checkpoints import CheckpointManager
+from litert_agent.runtime.service import AgentRuntime
+from litert_agent.skills.registry import SkillRegistry
 from litert_agent.version import __version__
 
 app = typer.Typer(name="litert-agent", help="LiteRT Autonomous Agent CLI")
@@ -487,6 +487,7 @@ def logs(limit: int = typer.Option(20, help="Number of log entries")):
 def web(host: str = typer.Option(None, "--host"), port: int = typer.Option(None, "--port")):
     """Start the Web UI + API server (shared runtime)."""
     import uvicorn
+
     from litert_agent.api.app import app as api_app
 
     cfg = Config.load()

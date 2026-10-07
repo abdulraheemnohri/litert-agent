@@ -1,6 +1,7 @@
 """Scheduler queue."""
 
 import asyncio
+
 from litert_agent.scheduler.jobs import Job
 
 

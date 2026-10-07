@@ -2,7 +2,7 @@
 
 import asyncio
 
-from litert_agent.runtime.events import EventBus, AgentEvent
+from litert_agent.runtime.events import AgentEvent, EventBus
 
 
 class Heartbeat:
@@ -33,7 +33,8 @@ class Supervisor:
     def check_health(self) -> dict:
         report = {"status": "HEALTHY", "checks": {}}
         if self.model_provider is not None:
-            available = bool(getattr(self.model_provider, "discovery_info", {}).get("available", False))
+            info = getattr(self.model_provider, "discovery_info", None) or {}
+            available = bool(info.get("available", False))
             report["checks"]["model"] = "READY" if available else "UNAVAILABLE"
             if not available:
                 report["status"] = "DEGRADED"

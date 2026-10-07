@@ -1,9 +1,9 @@
 """Executor: validates actions against policy, asks approval, runs tools."""
 
+from litert_agent.security.permissions import PermissionLevel
+from litert_agent.security.policy import SecurityPolicy
 from litert_agent.tools.base import ToolResult
 from litert_agent.tools.registry import ToolRegistry
-from litert_agent.security.policy import SecurityPolicy
-from litert_agent.security.permissions import PermissionLevel
 
 
 class Executor:

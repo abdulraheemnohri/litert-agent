@@ -1,12 +1,11 @@
 """Unit tests for the cognition layer."""
 
-import pytest
-from litert_agent.cognition.planner import Planner
 from litert_agent.cognition.decision import DecisionEngine
-from litert_agent.cognition.verifier import Verifier
+from litert_agent.cognition.planner import Planner
+from litert_agent.cognition.prioritizer import Prioritizer, Priority
 from litert_agent.cognition.reflector import Reflector
 from litert_agent.cognition.replanner import Replanner
-from litert_agent.cognition.prioritizer import Prioritizer, Priority
+from litert_agent.cognition.verifier import Verifier
 from litert_agent.model.protocol import ProtocolMessage
 from litert_agent.tools.base import ToolResult
 

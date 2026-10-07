@@ -2,7 +2,9 @@
 
 import uuid
 from datetime import datetime
+
 from pydantic import BaseModel, Field
+
 
 class Job(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

@@ -1,6 +1,5 @@
 """Unit tests for the shared runtime service."""
 
-import pytest
 from litert_agent.config import Config
 from litert_agent.runtime.service import AgentRuntime
 

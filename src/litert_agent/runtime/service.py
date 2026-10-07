@@ -1,9 +1,7 @@
 """Shared agent runtime service used by CLI, TUI and Web UI."""
 
-import asyncio
 
 from litert_agent.config import Config
-from litert_agent.runtime.events import EventBus
 from litert_agent.runtime.heartbeat import Heartbeat, Supervisor
 from litert_agent.runtime.shutdown import ShutdownManager
 from litert_agent.scheduler.queue import JobQueue

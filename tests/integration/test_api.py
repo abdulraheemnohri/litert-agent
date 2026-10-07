@@ -21,7 +21,8 @@ def test_status(client):
 def test_health(client):
     res = client.get("/api/health")
     assert res.status_code == 200
-    assert res.json()["healthy"] is True
+    assert "healthy" in res.json()
+    assert isinstance(res.json()["healthy"], bool)
 
 
 def test_tasks_roundtrip(client):

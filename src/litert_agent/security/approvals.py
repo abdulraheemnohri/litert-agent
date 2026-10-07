@@ -3,8 +3,6 @@
 import uuid
 from datetime import datetime
 
-from litert_agent.security.permissions import PermissionLevel
-
 
 class ApprovalManager:
     """Tracks pending approvals, session approvals and audited history."""

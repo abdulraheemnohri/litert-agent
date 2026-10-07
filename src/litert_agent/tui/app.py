@@ -6,12 +6,11 @@ import sqlite3
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Static, Log
+from textual.widgets import Footer, Header, Log, Static
 
 from litert_agent.config import Config
+from litert_agent.memory.sqlite import SCHEMA, DatabaseManager
 from litert_agent.runtime.service import AgentRuntime
-from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
-
 
 SCHEDULER_TABLE = """
 CREATE TABLE IF NOT EXISTS scheduler_jobs (
@@ -240,8 +239,9 @@ class TUIApp:
 
     def render_dashboard(self):
         """Rich fallback dashboard (used when Textual is unavailable)."""
-        from litert_agent.environment.detector import EnvironmentDetector
         from rich.panel import Panel
+
+        from litert_agent.environment.detector import EnvironmentDetector
         env = EnvironmentDetector.detect_all()
         status = AgentRuntime.get().status()
         self.console.print(Panel(

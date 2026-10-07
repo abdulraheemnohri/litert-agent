@@ -1,20 +1,21 @@
 """Unit tests for recovery and scheduler worker subsystems."""
 
 import pytest
+
 from litert_agent.memory.sqlite import DatabaseManager
 from litert_agent.recovery.checkpoints import CheckpointManager
 from litert_agent.recovery.crash_recovery import CrashRecovery
 from litert_agent.recovery.healer import Healer
-from litert_agent.scheduler.worker import JobWorker
-from litert_agent.scheduler.queue import JobQueue
 from litert_agent.scheduler.jobs import Job
+from litert_agent.scheduler.queue import JobQueue
+from litert_agent.scheduler.worker import JobWorker
 
 
 @pytest.fixture
 def db(tmp_path):
     manager = DatabaseManager(tmp_path / "agent.db")
     import asyncio
-    asyncio.get_event_loop().run_until_complete(manager.init_db())
+    asyncio.run(manager.init_db())
     return manager
 
 

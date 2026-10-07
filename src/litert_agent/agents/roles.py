@@ -2,6 +2,7 @@
 
 from enum import Enum
 
+
 class AgentRole(str, Enum):
     MAIN = "main"
     RESEARCHER = "researcher"

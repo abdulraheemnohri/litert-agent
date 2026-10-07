@@ -2,7 +2,9 @@
 
 import json
 import re
+
 from litert_agent.model.protocol import ProtocolMessage
+
 
 class ProtocolParser:
     @staticmethod

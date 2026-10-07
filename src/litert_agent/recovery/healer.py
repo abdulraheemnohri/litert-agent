@@ -1,6 +1,8 @@
 """Self-healing: diagnose errors and choose a recovery strategy."""
 
-from litert_agent.recovery.replanner_compat import classify_error  # noqa: F401 (re-export convenience)
+from litert_agent.recovery.replanner_compat import (
+    classify_error,  # noqa: F401 (re-export convenience)
+)
 
 
 class ErrorCategory:

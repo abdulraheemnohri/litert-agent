@@ -11,15 +11,15 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from litert_agent.api.runtime import get_runtime
+from litert_agent.api.schemas import ApprovalDecision, SettingsUpdate, TaskCreate
+from litert_agent.api.websocket import manager as ws_manager
 from litert_agent.config import Config
 from litert_agent.environment.capabilities import Capabilities
 from litert_agent.environment.resources import ResourceMonitor
-from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
+from litert_agent.memory.sqlite import SCHEMA, DatabaseManager
 from litert_agent.recovery.checkpoints import CheckpointManager
 from litert_agent.skills.registry import SkillRegistry
-from litert_agent.api.websocket import manager as ws_manager
-from litert_agent.api.schemas import TaskCreate, ApprovalDecision, SettingsUpdate
-from litert_agent.api.runtime import get_runtime
 from litert_agent.web.pages import render_page
 
 app = FastAPI(title="LiteRT Agent API", version="0.1.0")
@@ -234,13 +234,13 @@ async def diagnostics():
         _db.execute_read("SELECT 1")
         checks["database"] = "PASS"
     except Exception as exc:
-        checks["database"] = "FAIL: {}".format(exc)
+        checks["database"] = f"FAIL: {exc}"
 
     try:
         skills = _skills.list_skills()
         checks["skills"] = "PASS" if skills else "WARN: no skills registered"
     except Exception as exc:
-        checks["skills"] = "FAIL: {}".format(exc)
+        checks["skills"] = f"FAIL: {exc}"
 
     try:
         runtime = await get_runtime()
@@ -250,11 +250,11 @@ async def diagnostics():
             model_state = (model.get("checks") or {}).get("model", "UNKNOWN")
         else:
             model_state = str(model or "UNKNOWN")
-        checks["model"] = "READY" if model_state in ("READY", "OK", "PASS") else "WARN: {}".format(model_state)
+        checks["model"] = "READY" if model_state in ("READY", "OK", "PASS") else f"WARN: {model_state}"
         checks["runtime"] = "PASS" if runtime.started else "WARN: not started"
         checks["queue"] = "PASS"
     except Exception as exc:
-        checks["runtime"] = "FAIL: {}".format(exc)
+        checks["runtime"] = f"FAIL: {exc}"
 
     healthy = all(v in ("PASS", "READY") for v in checks.values())
     return {"checks": checks, "healthy": healthy}
@@ -293,7 +293,7 @@ async def get_settings():
 async def update_settings(update: SettingsUpdate):
     section = getattr(_config, update.section, None)
     if section is None or not hasattr(section, "model_dump"):
-        return {"error": "Unknown settings section: {}".format(update.section)}
+        return {"error": f"Unknown settings section: {update.section}"}
     for key, value in update.values.items():
         if hasattr(section, key):
             setattr(section, key, value)

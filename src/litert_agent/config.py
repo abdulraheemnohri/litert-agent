@@ -6,8 +6,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from litert_agent.constants import (
-    DEFAULT_HOME_DIR,
     DEFAULT_AUTONOMY_LEVEL,
+    DEFAULT_HOME_DIR,
     DEFAULT_LITERT_CLI,
 )
 

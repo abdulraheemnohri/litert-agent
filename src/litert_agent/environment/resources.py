@@ -2,6 +2,7 @@
 
 import psutil
 
+
 class ResourceMonitor:
     @staticmethod
     def get_cpu_usage() -> float:

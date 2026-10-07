@@ -1,6 +1,5 @@
 """Unit tests for configuration loading and profiles."""
 
-from pathlib import Path
 
 from litert_agent.config import Config
 

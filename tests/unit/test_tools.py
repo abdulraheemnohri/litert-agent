@@ -1,11 +1,13 @@
 """Unit tests for tools subsystem."""
 
+
 import pytest
-from pathlib import Path
-from litert_agent.tools.registry import ToolRegistry
-from litert_agent.tools.terminal import TerminalTool
+
 from litert_agent.tools.filesystem import FilesystemTool
 from litert_agent.tools.python import PythonTool
+from litert_agent.tools.registry import ToolRegistry
+from litert_agent.tools.terminal import TerminalTool
+
 
 @pytest.mark.asyncio
 async def test_tool_registry():

@@ -1,7 +1,9 @@
 """Security policy configuration and check logic."""
 
 import re
+
 from litert_agent.security.permissions import PermissionLevel
+
 
 class SecurityPolicy:
     def __init__(self, safe_mode: bool = False):
