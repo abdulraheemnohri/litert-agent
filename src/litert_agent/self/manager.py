@@ -141,8 +141,19 @@ class SelfManager:
             self.learning = LearningEngine(self.orchestrator.memory, registry, self.evolution)
             self.self_skills = SelfSkillManager(registry, SkillValidator, self.evolution)
 
-    def self_cycle(self) -> dict:
+    async def learn(self, task_id, success, observation, lesson=""):
+        if self.learning is None:
+            self.initialize_learning()
+        return await self.learning.learn_from_outcome(task_id, success, observation, lesson)
+
+    def discover_skills(self, task_description):
+        if self.self_skills is None:
+            self.initialize_learning()
+        return self.self_skills.discover(task_description)
+
+    def self_cycle(self):
         return self.autonomy.tick()
+
 
     def snapshot(self) -> dict:
         return {
