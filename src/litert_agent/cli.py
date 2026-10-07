@@ -24,12 +24,24 @@ from litert_agent.version import __version__
 app = typer.Typer(name="litert-agent", help="LiteRT Autonomous Agent CLI")
 console = Console()
 
+SCHEDULER_TABLE = """
+CREATE TABLE IF NOT EXISTS scheduler_jobs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    task_description TEXT NOT NULL,
+    cron_or_interval TEXT DEFAULT '',
+    status TEXT DEFAULT 'PENDING',
+    created_at TEXT NOT NULL
+)
+"""
+
 
 def _db() -> DatabaseManager:
     cfg = Config.load()
     db = DatabaseManager(cfg.agent.home_dir / "agent.db")
     with sqlite3.connect(db.db_path) as conn:
         conn.executescript(SCHEMA)
+        conn.executescript(SCHEDULER_TABLE)
         conn.commit()
     return db
 
@@ -362,6 +374,86 @@ def checkpoint_create(description: str = typer.Argument(...), task_id: str = typ
     console.print(f"[green]Checkpoint created:[/green] {cid}")
 
 
+schedule_app = typer.Typer(help="Scheduler jobs")
+app.add_typer(schedule_app, name="schedule")
+
+
+def _list_scheduler_jobs() -> list[dict]:
+    db = _db()
+    rows = db.execute_read(
+        "SELECT id, name, task_description, cron_or_interval, status, created_at "
+        "FROM scheduler_jobs ORDER BY created_at DESC LIMIT 100"
+    )
+    return [{"id": r[0], "name": r[1], "task_description": r[2],
+             "cron_or_interval": r[3], "status": r[4], "created_at": r[5]} for r in rows]
+
+
+@schedule_app.command("list")
+def schedule_list(json_out: bool = typer.Option(False, "--json")):
+    """List scheduled jobs."""
+    jobs = _list_scheduler_jobs()
+    if json_out:
+        _print({"jobs": jobs}, True)
+        return
+    if not jobs:
+        console.print("[yellow]No scheduled jobs yet.[/yellow]")
+        return
+    table = Table(title="Scheduled Jobs")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name")
+    table.add_column("Task")
+    table.add_column("Interval")
+    table.add_column("Status")
+    table.add_column("Created")
+    for j in jobs:
+        table.add_row(j["id"][:8], j["name"], j["task_description"],
+                      j["cron_or_interval"] or "-", j["status"], str(j["created_at"]))
+    console.print(table)
+
+
+@schedule_app.command("add")
+def schedule_add(
+    name: str = typer.Argument(..., help="Job name"),
+    task: str = typer.Argument(..., help="Task description for the agent"),
+    interval: str = typer.Option("", "--interval", help="Cron-like or interval description"),
+):
+    """Add a scheduled job (persisted in the local database)."""
+    db = _db()
+    job_id = str(uuid.uuid4())
+    db.execute_write(
+        "INSERT INTO scheduler_jobs (id, name, task_description, cron_or_interval, status, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (job_id, name, task, interval, "PENDING", datetime.utcnow().isoformat()),
+    )
+    console.print(f"[green]Job added:[/green] {job_id}")
+
+
+@schedule_app.command("remove")
+def schedule_remove(job_id: str = typer.Argument(...)):
+    """Remove a scheduled job."""
+    db = _db()
+    db.execute_write("DELETE FROM scheduler_jobs WHERE id = ?", (job_id,))
+    console.print(f"[green]Job removed:[/green] {job_id}")
+
+
+@schedule_app.command("run")
+def schedule_run(job_id: str = typer.Argument(...)):
+    """Run a scheduled job now on the shared runtime."""
+
+    async def _run():
+        db = _db()
+        rows = db.execute_read("SELECT task_description FROM scheduler_jobs WHERE id = ?", (job_id,))
+        if not rows:
+            console.print(f"[red]Job not found: {job_id}[/red]")
+            return
+        db.execute_write("UPDATE scheduler_jobs SET status = ? WHERE id = ?", ("RUNNING", job_id))
+        result = await AgentRuntime.get().run_task(rows[0][0])
+        db.execute_write("UPDATE scheduler_jobs SET status = ? WHERE id = ?", ("COMPLETED", job_id))
+        console.print(f"\n[bold blue]Result:[/bold blue]\n{result}")
+
+    asyncio.run(_run())
+
+
 @app.command()
 def logs(limit: int = typer.Option(20, help="Number of log entries")):
     """Show recent events log."""
@@ -414,6 +506,7 @@ def self_test():
     results["database"] = bool(db.execute_read("SELECT name FROM sqlite_master WHERE type='table'"))
     results["checkpoints"] = isinstance(CheckpointManager(db).list_checkpoints(), list)
     results["skills"] = len(SkillRegistry(db).list_skills()) > 0
+    results["scheduler"] = isinstance(_list_scheduler_jobs(), list)
     results["litert_lm"] = EnvironmentDetector.detect_all()["has_litert_lm"]
     results["runtime"] = AgentRuntime.get().status()["model_provider"] == "litert-cli"
     for name, ok in results.items():
