@@ -64,6 +64,15 @@ class GoalManager:
         )
         return {"id":cid,"topic":topic,"reason":reason,"priority":priority.upper(),"status":"PENDING"}
 
+    def peek_curiosity(self):
+        rows=self.db.execute_read(
+            "SELECT id,topic,reason,priority,status,created_at FROM curiosity_queue "
+            "WHERE status='PENDING' ORDER BY CASE priority WHEN 'CRITICAL' THEN 5 WHEN 'HIGH' THEN 4 WHEN 'NORMAL' THEN 3 WHEN 'LOW' THEN 2 ELSE 1 END DESC, created_at ASC LIMIT 1"
+        )
+        if not rows: return None
+        r=rows[0]
+        return {"id":r[0],"topic":r[1],"reason":r[2],"priority":r[3],"status":r[4],"created_at":r[5]}
+
     def pop_curiosity(self):
         rows=self.db.execute_read(
             "SELECT id,topic,reason,priority,status,created_at FROM curiosity_queue "
