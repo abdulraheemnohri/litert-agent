@@ -1,8 +1,11 @@
 """Safe self-skill lifecycle: discover, propose, validate, approve, register."""
 class SelfSkillManager:
+    """Safe self-skill lifecycle with version history and quarantine."""
     def __init__(self, registry, validator, evolution):
         self.registry, self.validator, self.evolution = registry, validator, evolution
         self.proposals = {}
+        self.versions = {}
+        self.quarantined = set()
 
     def discover(self, task_description):
         return self.registry.recommend(task_description)
@@ -33,5 +36,32 @@ class SelfSkillManager:
         p = self.proposals.get(name)
         if not p or p.get("status") != "APPROVED": raise PermissionError("explicit approval required")
         self.registry.register(p["skill"])
+        name = p["skill"]["name"]
+        self.versions.setdefault(name, []).append(dict(p["skill"]))
         p["status"] = "REGISTERED"
         return p
+
+
+    def version(self, name):
+        return list(self.versions.get(name, []))
+
+    def rollback(self, name):
+        history = self.versions.get(name, [])
+        if len(history) < 2:
+            return False, "no previous version"
+        history.pop()
+        self.registry.register(dict(history[-1]))
+        return True, dict(history[-1])
+
+    def quarantine(self, name, reason="repeated skill failure"):
+        if self.registry.find(name):
+            self.registry.disable(name)
+        self.quarantined.add(name)
+        return {"name": name, "status": "QUARANTINED", "reason": reason}
+
+    def restore(self, name):
+        if name not in self.quarantined:
+            return False
+        self.quarantined.discard(name)
+        self.registry.enable(name)
+        return True
