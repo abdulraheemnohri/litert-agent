@@ -13,11 +13,7 @@ app = typer.Typer(name="litert-agent", help="LiteRT Autonomous Agent CLI")
 console = Console()
 
 @app.command()
-def run(goal: str = typer.Argument(..., help="Goal or prompt for the autonomous agent"),
-    safe: bool = typer.Option(False, "--safe", help="Safe mode: block destructive ops"),
-    offline: bool = typer.Option(False, "--offline", help="Disable network access"),
-    profile: str = typer.Option("normal", "--profile", help="low-memory | normal | performance"),
-    workspace: str = typer.Option(None, "--workspace", help="Working directory")):
+def run(goal: str = typer.Argument(..., help="Goal or prompt for the autonomous agent")):
     """Run an autonomous task."""
     console.print(f"[bold green]Starting LiteRT Agent task:[/bold green] {goal}")
 
@@ -54,12 +50,6 @@ def capabilities():
     """List agent capabilities."""
     caps = Capabilities.discover()
     console.print(caps.model_dump_json(indent=2))
-
-@app.command()
-def version():
-    """Show application version."""
-    console.print(f"litert-agent {__version__}")
-
 
 if __name__ == "__main__":
     app()
