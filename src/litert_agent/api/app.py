@@ -288,6 +288,83 @@ async def self_state():
     manager = runtime.orchestrator.self_manager
     return manager.snapshot()
 
+@app.get("/api/self/overview")
+async def self_overview():
+    runtime = await get_runtime()
+    return runtime.orchestrator.self_manager.self_overview()
+
+@app.get("/api/self/research")
+async def self_research(topic: str = ""):
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    return {
+        "missions": manager.research.list_missions(),
+        "sources": manager.research.list_sources(),
+        "findings": manager.research.list_findings(topic),
+        "comparisons": manager.research.compare_claims(topic),
+    }
+
+class ResearchMissionCreate(BaseModel):
+    topic: str
+    goal: str
+    urls: list[str] = []
+
+@app.post("/api/self/research")
+async def create_research_mission(payload: ResearchMissionCreate):
+    runtime = await get_runtime()
+    return runtime.orchestrator.self_manager.research_mission(payload.topic, payload.goal, payload.urls)
+
+class ResearchClaimCreate(BaseModel):
+    mission_id: str
+    topic: str
+    url: str
+    claim: str
+    evidence: str = ""
+    confidence: float = 0.5
+
+@app.post("/api/self/research/claim")
+async def ingest_research_claim(payload: ResearchClaimCreate):
+    runtime = await get_runtime()
+    return await runtime.orchestrator.self_manager.research_source(
+        payload.mission_id, payload.topic, payload.url, payload.claim, payload.evidence, payload.confidence
+    )
+
+@app.get("/api/self/goals")
+async def self_goals(status: str | None = None):
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    return {"goals": manager.goals.list(status), "curiosity": manager.goals.pop_curiosity()}
+
+class GoalCreate(BaseModel):
+    title: str
+    description: str
+    priority: str = "NORMAL"
+    parent_id: str | None = None
+    goal_type: str = "user"
+
+@app.post("/api/self/goals")
+async def create_self_goal(payload: GoalCreate):
+    runtime = await get_runtime()
+    return runtime.orchestrator.self_manager.create_goal(
+        payload.title, payload.description, payload.priority, payload.parent_id, payload.goal_type
+    )
+
+@app.patch("/api/self/goals/{goal_id}")
+async def update_self_goal(goal_id: str, status: str | None = None, progress: float | None = None):
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    return manager.goals.update(goal_id, status, progress)
+
+@app.post("/api/self/curiosity")
+async def add_curiosity(topic: str, reason: str, priority: str = "LOW"):
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    return manager.goals.enqueue_curiosity(topic, reason, priority)
+
 @app.get("/api/system")
 async def system():
     return {"resources": _resource_snapshot(), "capabilities": Capabilities.discover().model_dump()}
