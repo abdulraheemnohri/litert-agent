@@ -16,7 +16,7 @@ from litert_agent.environment.capabilities import Capabilities
 from litert_agent.environment.resources import ResourceMonitor
 from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
 from litert_agent.recovery.checkpoints import CheckpointManager
-from litert_agent.security.policy import SecurityPolicy
+from litert_agent.scheduler.jobs import Job
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.api.websocket import manager as ws_manager
 from litert_agent.api.schemas import TaskCreate, ApprovalDecision, SettingsUpdate
@@ -37,8 +37,9 @@ with sqlite3.connect(_db.db_path) as conn:
 _checkpoints = CheckpointManager(_db)
 _skills = SkillRegistry(_db)
 
-PAGES = ("dashboard", "chat", "agent", "tasks", "memory", "skills", "tools",
-         "approvals", "checkpoints", "system", "settings", "logs")
+PAGES = ("dashboard", "chat", "agent", "tasks", "scheduler", "workers", "memory",
+         "skills", "tools", "approvals", "checkpoints", "logs", "system",
+         "diagnostics", "settings")
 
 
 def _resource_snapshot() -> dict:
@@ -120,6 +121,7 @@ async def list_memory():
     rows = _db.execute_read(
         "SELECT id, category, content, importance, created_at FROM memories ORDER BY created_at DESC LIMIT 100"
     )
+
     return {"memories": [{"id": r[0], "category": r[1], "content": r[2], "importance": r[3], "created_at": r[4]} for r in rows]}
 
 
@@ -146,6 +148,93 @@ async def approve(approval_id: str, decision: ApprovalDecision):
     runtime = await get_runtime()
     result = runtime.orchestrator.approval_manager.decide(approval_id, decision.decision)
     return result or {"error": "not found"}
+
+
+# ---------- Scheduler ----------
+@app.get("/api/scheduler")
+async def scheduler_jobs():
+    runtime = await get_runtime()
+    return {"jobs": [job.model_dump() for job in runtime.queue.list_jobs()],
+            "queue_size": runtime.queue.size(),
+            "worker_running": runtime.worker.running}
+
+
+class JobCreate(BaseModel):
+    name: str
+    task_description: str
+
+
+@app.post("/api/scheduler")
+async def scheduler_add(payload: JobCreate):
+    runtime = await get_runtime()
+    job = Job(name=payload.name, task_description=payload.task_description)
+    await runtime.queue.enqueue(job)
+    await ws_manager.broadcast({"type": "scheduler_event",
+                               "payload": {"job_id": job.id, "name": job.name, "event": "added"}})
+    return job.model_dump()
+
+
+@app.post("/api/scheduler/{job_id}/run")
+async def scheduler_run(job_id: str):
+    runtime = await get_runtime()
+    job = runtime.queue.get_job(job_id)
+    if job is None:
+        return {"error": "not found"}
+    import asyncio
+    job.status = "RUNNING"
+    asyncio.ensure_future(runtime.run_task(job.task_description))
+    await ws_manager.broadcast({"type": "scheduler_event",
+                               "payload": {"job_id": job.id, "name": job.name, "event": "run_now"}})
+    return {"id": job.id, "status": "RUNNING"}
+
+
+# ---------- Workers ----------
+@app.get("/api/workers")
+async def workers():
+    """Logical worker roles, all powered by the single LiteRT-LM backend."""
+    runtime = await get_runtime()
+    worker = runtime.worker
+    roles = ["Main", "Researcher", "Coder", "Tester", "Reviewer", "DevOps", "Browser"]
+    return {"workers": [
+        {"role": role,
+         "status": "RUNNING" if (worker.running or runtime.started) else "IDLE",
+         "completed_jobs": len(worker.completed) if role == "Main" else 0,
+         "queue_size": runtime.queue.size()}
+        for role in roles
+    ], "queue_size": runtime.queue.size()}
+
+
+# ---------- Diagnostics ----------
+@app.get("/api/diagnostics")
+async def diagnostics():
+    """Lightweight self-test: database, skills, runtime health."""
+    checks = {}
+
+    try:
+        _db.execute_read("SELECT 1")
+        checks["database"] = "PASS"
+    except Exception as exc:
+        checks["database"] = f"FAIL: {exc}"
+
+    try:
+        skills = _skills.list_skills()
+        checks["skills"] = "PASS" if skills else "WARN: no skills registered"
+    except Exception as exc:
+        checks["skills"] = f"FAIL: {exc}"
+
+    try:
+        runtime = await get_runtime()
+        health = runtime.health()
+        model_state = (health.get("model") or {}).get("checks", {}).get("model", "UNKNOWN") \
+            if isinstance(health.get("model"), dict) else health.get("model", "UNKNOWN")
+        checks["model"] = "READY" if model_state in ("READY", "OK", "PASS") else f"WARN: {model_state}"
+        checks["runtime"] = "PASS" if runtime.started else "WARN: not started"
+        checks["queue"] = "PASS"
+    except Exception as exc:
+        checks["runtime"] = f"FAIL: {exc}"
+
+    healthy = all(v == "PASS" or v == "READY" for v in checks.values())
+    return {"checks": checks, "healthy": healthy}
 
 
 @app.get("/api/checkpoints")

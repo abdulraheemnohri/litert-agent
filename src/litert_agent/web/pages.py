@@ -9,6 +9,8 @@ NAV_ITEMS = [
     ("chat", "Chat"),
     ("agent", "Agent"),
     ("tasks", "Tasks"),
+    ("scheduler", "Scheduler"),
+    ("workers", "Workers"),
     ("memory", "Memory"),
     ("skills", "Skills"),
     ("tools", "Tools"),
@@ -16,6 +18,7 @@ NAV_ITEMS = [
     ("checkpoints", "Checkpoints"),
     ("logs", "Logs"),
     ("system", "System"),
+    ("diagnostics", "Diagnostics"),
     ("settings", "Settings"),
 ]
 
