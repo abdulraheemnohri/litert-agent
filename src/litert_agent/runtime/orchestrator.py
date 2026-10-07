@@ -12,6 +12,7 @@ from litert_agent.runtime.loop import AutonomousLoop
 from litert_agent.security.approvals import ApprovalManager
 from litert_agent.security.audit import AuditLogger
 from litert_agent.security.policy import SecurityPolicy
+from litert_agent.self.manager import SelfManager
 from litert_agent.tools.archive import ArchiveTool, ProcessTool
 from litert_agent.tools.browser import BrowserTool
 from litert_agent.tools.filesystem import FilesystemTool
@@ -45,6 +46,7 @@ class Orchestrator:
         self.executor = Executor(self.tool_registry, self.policy, self.approval_manager)
         self.memory = MemoryManager(self.config.agent.home_dir / "agent.db")
         self.event_bus = EventBus()
+        self.self_manager = SelfManager(self.config, self)
 
     def _register_default_tools(self):
         for tool in (
@@ -66,6 +68,8 @@ class Orchestrator:
         await self.memory.initialize()
         self.checkpoint_manager = CheckpointManager(self.memory.db_manager)
         self.crash_recovery = CrashRecovery(self.memory.db_manager)
+        if self.config.self.enabled:
+            self.self_manager.initialize_learning()
 
     async def run_task(self, goal: str) -> str:
         loop = AutonomousLoop(
@@ -77,4 +81,5 @@ class Orchestrator:
             audit_logger=self.audit_logger,
             crash_recovery=getattr(self, "crash_recovery", None),
         )
+        loop.attach_self_manager(self.self_manager)
         return await loop.run_task(goal)

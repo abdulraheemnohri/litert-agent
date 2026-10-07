@@ -12,6 +12,7 @@ A fully local-first autonomous AI agent built in Python. It plans, executes, ver
 - **Safety-first** — tool policies, human approval gates, audit log, checkpoints, and rollback.
 - **Crash-resume** — goals are keyed and snapshotted; restart resumes an interrupted task automatically.
 - **Skills system** — 10 built-in skills with validation and a registry, plus user-provided skills.
+- **Self-X** — bounded self-awareness, diagnostics, resource guards, reflection/lesson capture, maintenance proposals, safe evolution proposals, local snapshots, and a dedicated Web/TUI/CLI self-control surface.
 
 ## Subsystems
 
@@ -87,6 +88,10 @@ litert-agent logs
 litert-agent web
 litert-agent tui --rich
 litert-agent self-test
+litert-agent self status
+litert-agent self diagnose
+litert-agent self maintenance
+litert-agent self snapshot
 litert-agent version
 ```
 

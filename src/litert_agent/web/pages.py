@@ -19,6 +19,7 @@ NAV_ITEMS = [
     ("logs", "Logs"),
     ("system", "System"),
     ("diagnostics", "Diagnostics"),
+    ("self", "Self-X"),
     ("settings", "Settings"),
 ]
 

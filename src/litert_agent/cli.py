@@ -16,6 +16,7 @@ from litert_agent.environment.capabilities import Capabilities
 from litert_agent.environment.detector import EnvironmentDetector
 from litert_agent.memory.sqlite import SCHEMA, DatabaseManager
 from litert_agent.recovery.checkpoints import CheckpointManager
+from litert_agent.self.doctor import SelfDoctor
 from litert_agent.runtime.service import AgentRuntime
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.version import __version__
@@ -513,6 +514,41 @@ def tui(full: bool = typer.Option(True, "--full/--rich", help="Full Textual TUI 
         tui_app.render_dashboard()
 
 
+self_app = typer.Typer(help="Self-awareness, diagnostics and bounded self-management")
+app.add_typer(self_app, name="self")
+
+
+@self_app.command("status")
+def self_status(json_out: bool = typer.Option(False, "--json")):
+    """Show the agent's self-awareness snapshot."""
+    data = AgentRuntime.get().orchestrator.self_manager.snapshot()
+    _print(data, json_out)
+
+
+@self_app.command("diagnose")
+def self_diagnose(json_out: bool = typer.Option(False, "--json")):
+    """Run bounded self-diagnostics without modifying the system."""
+    data = AgentRuntime.get().orchestrator.self_manager.diagnose()
+    _print(data, json_out)
+
+
+@self_app.command("maintenance")
+def self_maintenance(json_out: bool = typer.Option(False, "--json")):
+    """Show safe maintenance proposals; no action is executed automatically."""
+    data = AgentRuntime.get().orchestrator.self_manager.maintenance_plan()
+    _print({"actions": data}, json_out)
+
+
+@self_app.command("snapshot")
+def self_snapshot(path: str = typer.Option(None, "--path"), json_out: bool = typer.Option(False, "--json")):
+    """Export a diagnostic/self-awareness snapshot to local storage."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    target = manager.export_snapshot(
+        Config.load().agent.home_dir / "self" / "snapshot.json" if path is None else __import__("pathlib").Path(path)
+    )
+    _print({"path": str(target)}, json_out)
+
+
 @app.command()
 def self_test():
     """Run self-tests over core subsystems."""
@@ -523,6 +559,8 @@ def self_test():
     results["skills"] = len(SkillRegistry(db).list_skills()) > 0
     results["scheduler"] = isinstance(_list_scheduler_jobs(), list)
     results["litert_lm"] = EnvironmentDetector.detect_all()["has_litert_lm"]
+    self_report = asyncio.run(SelfDoctor(Config.load(), AgentRuntime.get().orchestrator).run())
+    results["self_diagnostics"] = self_report["ok"]
     results["runtime"] = AgentRuntime.get().status()["model_provider"] == "litert-cli"
     for name, ok in results.items():
         console.print(f"[{'green' if ok else 'red'}]{'PASS' if ok else 'FAIL'}[/] {name}")

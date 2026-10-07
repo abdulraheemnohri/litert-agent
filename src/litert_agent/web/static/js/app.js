@@ -229,6 +229,18 @@ const renderers = {
       '<button onclick="runDiagnostics()">Run Diagnostics</button>') +
       '<div id="diag-box"></div>';
   },
+  self: async () => {
+    const data = await api('/api/self');
+    const d = data.diagnostics || {};
+    const rows = Object.entries(d.checks || {}).map(([k, v]) => [esc(k), badge(v ? 'PASS' : 'WARN')]);
+    const maintenance = (data.maintenance || []).map(x => '<li><b>' + esc(x.action) + '</b> — ' + esc(x.reason) + '</li>').join('') || '<li>No maintenance proposals.</li>';
+    return '<div class="grid">' +
+      card('Identity', '<div class="metric">' + esc(data.identity.name) + '</div><small>' + esc(data.identity.mission) + '</small>') +
+      card('Resources', '<div class="metric">' + esc(data.resources.memory_percent) + '% RAM</div><small>' + esc(data.resources.cpu_percent) + '% CPU · ' + esc(data.resources.disk_percent) + '% disk</small>') +
+      card('Provider', '<div class="metric">LiteRT-LM CLI</div><small>No fallback backend</small>') +
+      '</div>' + card('Diagnostics', table(['Check', 'Status'], rows)) +
+      card('Bounded Maintenance', '<ul>' + maintenance + '</ul>');
+  },
   settings: async () => {
     const data = await api('/api/settings');
     return card('Configuration', '<pre style="font-size:12px;white-space:pre-wrap">' + esc(JSON.stringify(data.config, null, 2)) + '</pre>');

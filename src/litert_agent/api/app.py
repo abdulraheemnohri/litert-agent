@@ -51,7 +51,7 @@ _skills = SkillRegistry(_db)
 
 PAGES = ("dashboard", "chat", "agent", "tasks", "scheduler", "workers", "memory",
          "skills", "tools", "approvals", "checkpoints", "logs", "system",
-         "diagnostics", "settings")
+         "diagnostics", "self", "settings")
 
 
 def _resource_snapshot() -> dict:
@@ -278,6 +278,15 @@ async def logs():
     )
     return {"logs": [{"id": r[0], "type": r[1], "payload": r[2], "created_at": r[3]} for r in rows]}
 
+
+
+
+@app.get("/api/self")
+async def self_state():
+    """Self-awareness snapshot and bounded maintenance proposals."""
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    return manager.snapshot()
 
 @app.get("/api/system")
 async def system():

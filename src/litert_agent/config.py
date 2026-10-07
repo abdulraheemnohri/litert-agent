@@ -52,6 +52,15 @@ class WebConfig(BaseModel):
     port: int = 8765
 
 
+class SelfConfig(BaseModel):
+    enabled: bool = True
+    diagnostics_on_start: bool = True
+    auto_maintenance: bool = False
+    max_concurrent_workers: int = 4
+    snapshot_enabled: bool = True
+    snapshot_interval_seconds: float = 900.0
+
+
 class Config(BaseModel):
     agent: AgentConfig = Field(default_factory=AgentConfig)
     model: ModelConfig = Field(default_factory=ModelConfig)
@@ -59,6 +68,7 @@ class Config(BaseModel):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     web: WebConfig = Field(default_factory=WebConfig)
+    self: SelfConfig = Field(default_factory=SelfConfig)
 
     @classmethod
     def load(cls, config_path: Path | None = None, overrides: dict | None = None) -> "Config":
@@ -96,11 +106,12 @@ class Config(BaseModel):
         p = self.agent.profile
         if p == "low-memory":
             self.scheduler.workers = 1
+            self.self.max_concurrent_workers = 1
             self.scheduler.heartbeat_seconds = 60.0
             self.memory.working_max_items = 20
             self.loop.max_iterations = min(self.loop.max_iterations, 25)
         elif p == "performance":
-            self.scheduler.workers = 4
+            self.scheduler.workers = min(4, self.self.max_concurrent_workers)
             self.scheduler.heartbeat_seconds = 15.0
             self.memory.working_max_items = 100
         # normal: keep defaults

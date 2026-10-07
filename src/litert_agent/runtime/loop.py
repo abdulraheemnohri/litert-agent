@@ -45,7 +45,16 @@ class AutonomousLoop:
         self.checkpoint_manager = checkpoint_manager
         self.audit_logger = audit_logger
         self.crash_recovery = crash_recovery
+        self.self_manager = None
         self.state = AgentState()
+
+    def attach_self_manager(self, manager) -> None:
+        self.self_manager = manager
+
+    def orchestrator_self_diagnostics(self):
+        if self.self_manager is None:
+            return None
+        return self.self_manager.diagnose()
 
     def _audit(self, event_type: str, tool: str, args: dict, result: str, permission: str = "ALLOW"):
         if self.audit_logger is not None:
@@ -77,6 +86,7 @@ class AutonomousLoop:
 
     async def run_task(self, goal: str) -> str:
         self.state.status = "RUNNING"
+        self.orchestrator_self_diagnostics()
         self.event_bus.publish(AgentEvent(event_type="task_started", payload={"goal": goal}))
 
         self.memory.working.add("user", goal)
@@ -117,9 +127,23 @@ class AutonomousLoop:
 
         while self.state.is_running and self.state.iteration_count < self.state.max_iterations:
             self.state.iteration_count += 1
+            if self.self_manager is not None:
+                resources = self.self_manager.resources()
+                if resources["memory_percent"] >= 95 or resources["disk_percent"] >= 99:
+                    observation = f"Resource guard triggered: {resources}"
+                    self._persist_progress(goal_key, observation, plan_steps)
+                    self.state.status = "PAUSED"
+                    return "Task paused by resource safety guard; free resources and resume."
 
             prompt = f"Observation: {observation}\nTask: {goal}\nRemaining plan: {plan_steps}"
             msg: ProtocolMessage = await self.model_provider.generate(prompt)
+
+            if msg.type == "error" and "LiteRT-LM" in msg.content:
+                await self.memory.tasks.update_task_status(task_id, "FAILED", msg.content)
+                self._audit("model_error", "litert-cli", {}, msg.content, "BLOCK")
+                self._persist_progress(goal_key, msg.content, plan_steps)
+                self.state.status = "IDLE"
+                return f"Task failed: {msg.content}"
 
             decision = self.decision_engine.decide(msg)
 
@@ -134,6 +158,9 @@ class AutonomousLoop:
                     review["verdict"] == "PASS",
                 )
                 await self.memory.lessons.add_lesson("task_outcome", lesson)
+                if self.self_manager is not None:
+                    self.self_manager.reflect(task_id, True, msg.content or "completed", lesson)
+                    await self.self_manager.learn(task_id, True, msg.content or "completed", lesson)
                 await self.memory.tasks.update_task_status(task_id, "COMPLETED", msg.content)
                 self.event_bus.publish(AgentEvent(event_type="task_completed", payload={"task_id": task_id, "result": msg.content}))
                 self._audit("task_completed", "loop", {"goal": goal}, msg.content or "", "ALLOW")
@@ -186,6 +213,8 @@ class AutonomousLoop:
         # max iterations reached: keep the snapshot so a later run can resume
         self._persist_progress(goal_key, observation, plan_steps)
         await self.memory.tasks.update_task_status(task_id, "FAILED", "Max iterations reached")
+        if self.self_manager is not None:
+            self.self_manager.reflect(task_id, False, "Max iterations reached", "Bound iteration limits before escalating.")
         self.event_bus.publish(AgentEvent(event_type="task_failed", payload={"task_id": task_id, "error": "max_iterations"}))
         self.state.status = "IDLE"
         return "Task stopped: Max iterations reached."
