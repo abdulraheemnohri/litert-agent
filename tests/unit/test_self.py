@@ -32,3 +32,20 @@ def test_evolution_blocks_forbidden_areas():
     except ValueError:
         return
     raise AssertionError("forbidden evolution must be rejected")
+
+
+def test_self_skill_lifecycle():
+    from litert_agent.self.skills import SelfSkillManager
+    from litert_agent.skills.validator import SkillValidator
+    from litert_agent.self.evolution import EvolutionManager
+    class R:
+        def __init__(self): self.items = []
+        def recommend(self, task): return []
+        def register(self, skill): self.items.append(skill)
+    r = R()
+    m = SelfSkillManager(r, SkillValidator, EvolutionManager())
+    m.propose("test-skill", "safe test skill", ["python"], "repeated testing workflow")
+    assert m.validate("test-skill")[0]
+    m.approve("test-skill")
+    m.register("test-skill")
+    assert r.items[0]["name"] == "test-skill"
