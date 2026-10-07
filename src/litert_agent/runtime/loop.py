@@ -160,6 +160,7 @@ class AutonomousLoop:
                 await self.memory.lessons.add_lesson("task_outcome", lesson)
                 if self.self_manager is not None:
                     self.self_manager.reflect(task_id, True, msg.content or "completed", lesson)
+                    await self.self_manager.learn(task_id, True, msg.content or "completed", lesson)
                 await self.memory.tasks.update_task_status(task_id, "COMPLETED", msg.content)
                 self.event_bus.publish(AgentEvent(event_type="task_completed", payload={"task_id": task_id, "result": msg.content}))
                 self._audit("task_completed", "loop", {"goal": goal}, msg.content or "", "ALLOW")
