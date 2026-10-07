@@ -13,7 +13,8 @@ from litert_agent.scheduler.jobs import Job
 @pytest.fixture
 def db(tmp_path):
     manager = DatabaseManager(tmp_path / "agent.db")
-    manager.init_db()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(manager.init_db())
     return manager
 
 
