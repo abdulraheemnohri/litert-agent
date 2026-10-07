@@ -1,15 +1,21 @@
-"""HTTP client tool."""
+"""HTTP client tool with offline-mode enforcement."""
 
 import httpx
 from litert_agent.tools.base import BaseTool, ToolResult
 
+
 class HTTPTool(BaseTool):
     name = "http"
-    description = "Make HTTP request (GET, POST, etc.)"
+    description = "Make HTTP requests (GET/POST); blocked in offline mode"
 
-    async def execute(self, action: str = "get", url: str = "", headers: dict = None, json_data: dict = None, **kwargs) -> ToolResult:
+    offline: bool = False
+
+    async def execute(self, action: str = "get", url: str = "", headers: dict | None = None, json_data: dict | None = None, **kwargs) -> ToolResult:
         if not url:
             return ToolResult(success=False, output="", error="URL required")
+
+        if self.offline:
+            return ToolResult(success=False, output="", error="Network access disabled: offline mode is active")
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
