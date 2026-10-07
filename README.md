@@ -1,76 +1,152 @@
-# LiteRT Agent
+# litert-agent
 
-A **fully local-first autonomous AI agent** powered by the **LiteRT-LM CLI** as its *only* AI inference backend. No cloud LLMs, no fallback providers — ever.
+A fully local-first autonomous AI agent built in Python. It plans, executes, verifies, and reflects on tasks using the **LiteRT-LM CLI** as its single and only model backend.
 
-## Interfaces
+> **Non-negotiable rule:** LiteRT-LM CLI is the only model backend. There is no fallback provider, and none will ever be added. If the model reports an error, the agent stops and escalates — it never silently switches models.
 
-| Interface | Command |
-|---|---|
-| CLI | `litert-agent run "goal"` |
-| Chat | `litert-agent chat` |
-| TUI Dashboard | `litert-agent tui` |
-| Web UI + API | `litert-agent web` (http://127.0.0.1:8765) |
+## Highlights
 
-All interfaces share one agent runtime, SQLite memory and event bus.
-
-## Architecture
-
-```
-CLI / TUI / Web UI
-        │
-   Agent API Core
-        │
-  ┌─────┼─────┐
-Cognition Memory Security
-  └─────┼─────┘
-  LiteRT-LM Provider
-        │
-   LiteRT-LM CLI   ← the only model backend
-        │
-  Tools (terminal, filesystem, git, python, browser, http)
-```
+- **Autonomous loop** — plan → audit → checkpoint → execute → verify → critic → reflect → replan, with escalation when stuck.
+- **Local-first** — runs entirely on your machine. Memory, checkpoints, and job queues live in SQLite.
+- **Rich interfaces** — Typer CLI, Textual TUI, and FastAPI web UI, all sharing one runtime.
+- **Safety-first** — tool policies, human approval gates, audit log, checkpoints, and rollback.
+- **Crash-resume** — goals are keyed and snapshotted; restart resumes an interrupted task automatically.
+- **Skills system** — 10 built-in skills with validation and a registry, plus user-provided skills.
 
 ## Subsystems
 
-- **Cognition** — planner, decision engine, executor, verifier, critic, reflector, replanner, prioritizer
-- **Model** — LiteRT-LM CLI discovery, provider, protocol parser (never invents CLI commands; probes `--help` at runtime)
-- **Memory** — SQLite-backed working / episodic / semantic / lessons / tasks
-- **Security** — policy engine (ALLOW / ASK / BLOCK), safe mode, protected paths
-- **Recovery** — checkpoints, rollback, self-healing, crash recovery
-- **Skills** — 10 built-in skills with validator + usage tracking registry
-- **Scheduler** — job queue, background worker, delegation to role workers
-- **API/Web** — FastAPI + WebSocket live events, modern dark responsive Web UI
+| Subsystem | Purpose |
+| --- | --- |
+| `cognition` | Planner, decision, executor (policy + approvals), verifier, critic, reflector, replanner, prioritizer |
+| `runtime` | Integrated loop, orchestrator (10 tools), shared `AgentRuntime`, heartbeat supervisor, graceful shutdown |
+| `recovery` | Checkpoints, rollback, healer, crash recovery, replanner compatibility |
+| `skills` | Loader, registry, validator, 10 built-in skills |
+| `scheduler` | SQLite-backed job queue and worker (claim / execute / release, re-queue on failure) |
+| `security` | Tool policy and pending approvals with history (allow-once / allow-session / deny) |
+| `api` | FastAPI app with shared runtime, `/api/chat`, WebSocket, scheduler and worker endpoints |
+| `web` | 15-page web UI: chat, agent, tasks, approvals, scheduler, workers, diagnostics, checkpoints, and more |
+| `tui` | Full Textual TUI with rich fallback; scheduler view, approval keys, real pause/resume |
+| `tools` | Real grep-based search, HTTP client with offline-mode enforcement |
 
 ## Installation
 
+Requires Python 3.12+.
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+git clone https://github.com/abdulraheemnohri/litert-agent.git
+cd litert-agent
+pip install -e .
 ```
+
+Make sure the LiteRT-LM CLI is installed and available on your `PATH`. litert-agent will not run without it — by design.
 
 ## Usage
 
+### CLI
+
 ```bash
-litert-agent run "Create a Python app that monitors my system"
-litert-agent doctor          # self-diagnostics
-litert-agent status --json   # scripting-friendly output
-litert-agent task list
-litert-agent memory search "lesson"
+# Run an autonomous task
+litert-agent run "Summarize the notes in ./workspace" --profile normal
+
+# Safer, offline variants
+litert-agent run "..." --safe
+litert-agent run "..." --offline
+
+# Interactive chat
+litert-agent chat
+
+# Status, health, doctor
+litert-agent status
+litert-agent health
+litert-agent doctor
+
+# Scheduler (SQLite-backed)
+litert-agent schedule list
+litert-agent schedule add "Daily report" --cron "0 9 * * *"
+litert-agent schedule remove <job-id>
+litert-agent schedule run <job-id>
+
+# Approvals
+litert-agent security list
+litert-agent security decide <request-id> --allow once|session|deny
+
+# Checkpoints and recovery
 litert-agent checkpoint list
+litert-agent checkpoint restore <checkpoint-id>
+
+# Other commands
+litert-agent task list
+litert-agent memory show
+litert-agent skill list
+litert-agent tool list
+litert-agent logs
+litert-agent web
+litert-agent tui --rich
 litert-agent self-test
-litert-agent web             # full console UI
+litert-agent version
 ```
 
-## Tests
+### Web UI
+
+```bash
+litert-agent web
+```
+
+Opens the FastAPI server with a 15-page UI including chat, agent monitoring, tasks, approvals (Allow Once / Allow Session / Deny), scheduler, workers, diagnostics, and checkpoints.
+
+### TUI
+
+```bash
+litert-agent tui        # Textual interface
+litert-agent tui --rich # Rich fallback
+```
+
+Key bindings: `D` dashboard, `T` tasks, `A` approvals (`O` allow once, `Y` allow session, `X` deny), `S` scheduler, `L` logs, `P` pause, `R` resume, `Q` quit.
+
+## Crash Recovery
+
+Every autonomous run is keyed by a goal hash. Progress is checkpointed per iteration; if the process crashes, the next run with the same goal resumes from the last checkpoint and publishes a `task_resumed` event. Snapshots are cleared on completion or hard failure and kept on max-iteration exhaustion.
+
+## Configuration
+
+Configuration lives in `~/.litert-agent/config.toml` with three built-in profiles:
+
+- `low-memory` — constrained machines
+- `normal` — balanced defaults
+- `performance` — aggressive settings
+
+See `docs/configuration.md` for all options (loop, memory, scheduler, web).
+
+## Documentation
+
+- `docs/architecture.md`
+- `docs/installation.md`
+- `docs/cli.md`
+- `docs/web-ui.md`
+- `docs/tui.md`
+- `docs/security.md`
+- `docs/recovery.md`
+- `docs/skills.md`
+- `docs/runtime.md`
+- `docs/configuration.md`
+- `docs/troubleshooting.md`
+
+## Testing
 
 ```bash
 pytest
 ```
 
-## Non-negotiable rule
+Unit tests cover cognition, recovery, skills, config, runtime service, chat API, scheduler, approvals, and crash-recovery integration. Integration tests cover the API and the full loop with a scripted fake provider.
 
-If LiteRT-LM is unavailable the agent reports an error — it never silently switches to another provider. See the [master specification](docs/architecture.md).
+## Contributing
+
+See `CONTRIBUTING.md`. Conventional commits are required.
 
 ## License
 
-MIT
+See the repository for license details.
+
+## Project Status
+
+Work in progress; see `CHANGELOG.md` for the latest changes.
