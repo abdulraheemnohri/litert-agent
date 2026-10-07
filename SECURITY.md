@@ -1,18 +1,26 @@
 # Security Policy
 
-## Permission model
-Every tool call passes through `SecurityPolicy`:
-- **ALLOW** — reads and safe operations
-- **ASK** — package installs, protected paths (`.env`, `id_rsa`, `.git`, passwd/shadow); requires approval
-- **BLOCK** — `sudo`, `rm -rf /`; always denied
+## Supported versions
 
-## Secrets
-`SecretSanitizer` masks API keys, passwords, secrets and bearer tokens before anything is written to audit logs.
+Only the latest `main` branch is supported.
 
-## Reporting
-Open a private security advisory on GitHub (Security tab) or an issue marked **security**. Do not post exploitable details publicly.
+## Local-first design
+
+litert-agent is fully local-first. The agent, its tools, its SQLite state, and
+the LiteRT-LM model backend all run on your machine. No telemetry is collected.
+
+## Reporting a vulnerability
+
+Please open a private security advisory on GitHub
+(`Security > Report a vulnerability`) instead of a public issue. Include:
+
+- a minimal reproduction,
+- the affected component (cognition, runtime, tools, web, api, tui),
+- the LiteRT-LM CLI version.
 
 ## Hard rules
-- No credential ever enters the model context or ordinary memory
-- Safe mode blocks all destructive writes and network
-- Security controls cannot be disabled by skills or self-modification
+
+- LiteRT-LM CLI is the only model backend. No fallback provider will be added.
+- Never commit secrets, credentials, `.env` files, or private keys.
+- Dangerous tool actions require explicit human approval (allow-once /
+  allow-session / deny) unless a profile explicitly opts out.
