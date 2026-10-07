@@ -10,6 +10,9 @@
 - Web UI pages: Chat, Agent, Scheduler, Workers, Diagnostics; task creation and
   checkpoint restore actions
 - Tests for scheduler queue registry and job worker lifecycle
+- Approvals: Web UI Allow Once / Allow Session / Deny actions with decision history;
+  CLI `security decide <id> <allow_once|allow|deny>`
+- Tests for the approval manager decision lifecycle
 
 ### Fixed
 - Broken `th,td` CSS rule (newline inside `solid`) in the Web UI stylesheet
