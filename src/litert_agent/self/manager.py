@@ -13,6 +13,7 @@ from litert_agent.self.evolution import EvolutionManager
 from litert_agent.self.learning import LearningEngine
 from litert_agent.self.skills import SelfSkillManager
 from litert_agent.self.autonomy import AutonomousSelfController
+from litert_agent.self.web_learning import WebLearningEngine
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.skills.validator import SkillValidator
 
@@ -34,6 +35,7 @@ class SelfManager:
         self.learning = None
         self.self_skills = None
         self.autonomy = AutonomousSelfController(self)
+        self.web_learning = None
 
     def identity(self) -> dict:
         return {
@@ -140,6 +142,7 @@ class SelfManager:
             registry = SkillRegistry(self.orchestrator.memory.db_manager)
             self.learning = LearningEngine(self.orchestrator.memory, registry, self.evolution)
             self.self_skills = SelfSkillManager(registry, SkillValidator, self.evolution)
+            self.web_learning = WebLearningEngine(self.orchestrator.tool_registry.get("http"), self.orchestrator.memory)
 
     async def learn(self, task_id, success, observation, lesson=""):
         if self.learning is None:
@@ -150,6 +153,12 @@ class SelfManager:
         if self.self_skills is None:
             self.initialize_learning()
         return self.self_skills.discover(task_description)
+
+    async def learn_from_web(self, url, lesson):
+        if self.web_learning is None:
+            self.initialize_learning()
+        evidence = await self.web_learning.fetch(url)
+        return await self.web_learning.ingest(evidence, lesson)
 
     def self_cycle(self):
         return self.autonomy.tick()
