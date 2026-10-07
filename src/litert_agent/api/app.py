@@ -30,6 +30,7 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 # --- shared runtime services ---
 _config = Config.load()
 _db = DatabaseManager(_config.agent.home_dir / "agent.db")
+
 SCHEDULER_TABLE = """
 CREATE TABLE IF NOT EXISTS scheduler_jobs (
     id TEXT PRIMARY KEY,
@@ -66,8 +67,7 @@ async def index():
     return render_page("dashboard")
 
 
-@app.get("/{page}", response_class=HTMLRespon
-se)
+@app.get("/{page}", response_class=HTMLResponse)
 async def generic_page(page: str):
     if page in PAGES:
         return render_page(page)
@@ -131,10 +131,8 @@ async def chat(message: ChatMessage):
 @app.get("/api/memory")
 async def list_memory():
     rows = _db.execute_read(
-        "SELECT id, category, content, importance, created_at FROM memories ORDER 
-BY created_at DESC LIMIT 100"
+        "SELECT id, category, content, importance, created_at FROM memories ORDER BY created_at DESC LIMIT 100"
     )
-
     return {"memories": [{"id": r[0], "category": r[1], "content": r[2], "importance": r[3], "created_at": r[4]} for r in rows]}
 
 
@@ -185,7 +183,6 @@ class JobCreate(BaseModel):
 
 @app.post("/api/scheduler")
 async def scheduler_add(payload: JobCreate):
-    runtime = await get_runtime()
     job_id = str(uuid.uuid4())
     _db.execute_write(
         "INSERT INTO scheduler_jobs (id, name, task_description, cron_or_interval, status, created_at) "
@@ -237,27 +234,29 @@ async def diagnostics():
         _db.execute_read("SELECT 1")
         checks["database"] = "PASS"
     except Exception as exc:
-        checks["database"] = f"FAIL: {exc}"
+        checks["database"] = "FAIL: {}".format(exc)
 
     try:
         skills = _skills.list_skills()
         checks["skills"] = "PASS" if skills else "WARN: no skills registered"
     except Exception as exc:
-        checks["skills"] = f"FAIL: {exc}"
+        checks["skills"] = "FAIL: {}".format(exc)
 
     try:
         runtime = await get_runtime()
         health = runtime.health()
-        model_state = (health.get("model") or {}).get("checks", {}).get("model", "UNKNOWN") \
-            if isinstance(health.get("model"), dict) else health.get("model", "UNKNOWN")
-        checks["model"] = "READY" if model_state in ("READY", "OK", "PASS") else f"WARN: {model_state}"
+        model = health.get("model")
+        if isinstance(model, dict):
+            model_state = (model.get("checks") or {}).get("model", "UNKNOWN")
+        else:
+            model_state = str(model or "UNKNOWN")
+        checks["model"] = "READY" if model_state in ("READY", "OK", "PASS") else "WARN: {}".format(model_state)
         checks["runtime"] = "PASS" if runtime.started else "WARN: not started"
         checks["queue"] = "PASS"
     except Exception as exc:
-        checks["runtime"] = f"FAIL: {exc}"
+        checks["runtime"] = "FAIL: {}".format(exc)
 
-    healthy = all(v == "PASS" or
- v == "READY" for v in checks.values())
+    healthy = all(v in ("PASS", "READY") for v in checks.values())
     return {"checks": checks, "healthy": healthy}
 
 
@@ -294,7 +293,7 @@ async def get_settings():
 async def update_settings(update: SettingsUpdate):
     section = getattr(_config, update.section, None)
     if section is None or not hasattr(section, "model_dump"):
-        return {"error": f"Unknown settings section: {update.section}"}
+        return {"error": "Unknown settings section: {}".format(update.section)}
     for key, value in update.values.items():
         if hasattr(section, key):
             setattr(section, key, value)
