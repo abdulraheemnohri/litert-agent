@@ -86,7 +86,7 @@ class AutonomousLoop:
 
     async def run_task(self, goal: str) -> str:
         self.state.status = "RUNNING"
-        self_report = self.orchestrator_self_diagnostics()
+        self.orchestrator_self_diagnostics()
         self.event_bus.publish(AgentEvent(event_type="task_started", payload={"goal": goal}))
 
         self.memory.working.add("user", goal)
