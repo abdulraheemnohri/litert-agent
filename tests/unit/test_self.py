@@ -49,3 +49,12 @@ def test_self_skill_lifecycle():
     m.approve("test-skill")
     m.register("test-skill")
     assert r.items[0]["name"] == "test-skill"
+
+
+def test_web_learning_url_validation():
+    from litert_agent.self.web_learning import WebLearningEngine
+    class H: pass
+    class M: pass
+    e = WebLearningEngine(H(), M())
+    assert e.validate_url("https://example.com")
+    assert not e.validate_url("file:///tmp/x")
