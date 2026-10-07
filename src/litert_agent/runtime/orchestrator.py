@@ -12,6 +12,7 @@ from litert_agent.runtime.loop import AutonomousLoop
 from litert_agent.security.approvals import ApprovalManager
 from litert_agent.security.audit import AuditLogger
 from litert_agent.security.policy import SecurityPolicy
+from litert_agent.self.manager import SelfManager
 from litert_agent.tools.archive import ArchiveTool, ProcessTool
 from litert_agent.tools.browser import BrowserTool
 from litert_agent.tools.filesystem import FilesystemTool
@@ -45,6 +46,7 @@ class Orchestrator:
         self.executor = Executor(self.tool_registry, self.policy, self.approval_manager)
         self.memory = MemoryManager(self.config.agent.home_dir / "agent.db")
         self.event_bus = EventBus()
+        self.self_manager = SelfManager(self.config, self)
 
     def _register_default_tools(self):
         for tool in (
