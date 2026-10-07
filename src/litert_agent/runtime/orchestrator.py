@@ -68,6 +68,8 @@ class Orchestrator:
         await self.memory.initialize()
         self.checkpoint_manager = CheckpointManager(self.memory.db_manager)
         self.crash_recovery = CrashRecovery(self.memory.db_manager)
+        if self.config.self.enabled:
+            self.self_manager.initialize_learning()
 
     async def run_task(self, goal: str) -> str:
         loop = AutonomousLoop(
