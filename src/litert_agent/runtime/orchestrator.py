@@ -79,4 +79,5 @@ class Orchestrator:
             audit_logger=self.audit_logger,
             crash_recovery=getattr(self, "crash_recovery", None),
         )
+        loop.attach_self_manager(self.self_manager)
         return await loop.run_task(goal)
