@@ -2,22 +2,37 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import sqlite3
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Footer, Header, Static, DataTable, Log
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Footer, Header, Static, Log
 
 from litert_agent.config import Config
 from litert_agent.runtime.service import AgentRuntime
 from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
-from litert_agent.recovery.checkpoints import CheckpointManager
-
-import sqlite3
 
 
-class Sidebar(Static):
-    """Navigation sidebar."""
+SCHEDULER_TABLE = """
+CREATE TABLE IF NOT EXISTS scheduler_jobs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    task_description TEXT NOT NULL,
+    cron_or_interval TEXT DEFAULT '',
+    status TEXT DEFAULT 'PENDING',
+    created_at TEXT NOT NULL
+)
+"""
+
+
+def _db() -> DatabaseManager:
+    cfg = Config.load()
+    db = DatabaseManager(cfg.agent.home_dir / "agent.db")
+    with sqlite3.connect(db.db_path) as conn:
+        conn.executescript(SCHEMA)
+        conn.executescript(SCHEDULER_TABLE)
+        conn.commit()
+    return db
 
 
 class DashboardView(Static):
@@ -37,7 +52,7 @@ class DashboardView(Static):
             f"  Health: {health.get('status', 'UNKNOWN')}\n\n"
             f"[b]Queue[/b]\n"
             f"  Pending jobs: {status['queue_size']}\n\n"
-            f"  [i]Press T for tasks, A for approvals, L for logs, Q to quit.[/i]"
+            f"  [i]T tasks · S scheduler · A approvals · L logs · P pause · R resume · Q quit[/i]"
         )
 
 
@@ -46,11 +61,7 @@ class TasksView(Static):
         self.update(self.render_tasks())
 
     def render_tasks(self) -> str:
-        cfg = Config.load()
-        db = DatabaseManager(cfg.agent.home_dir / "agent.db")
-        with sqlite3.connect(db.db_path) as conn:
-            conn.executescript(SCHEMA)
-            conn.commit()
+        db = _db()
         rows = db.execute_read(
             "SELECT id, description, status, created_at FROM tasks ORDER BY created_at DESC LIMIT 20"
         )
@@ -59,6 +70,29 @@ class TasksView(Static):
         lines = ["[b]ID         Status      Description[/b]"]
         for r in rows:
             lines.append(f"{r[0][:10]}  {r[2]:<10}  {str(r[1])[:60]}")
+        return "\n".join(lines)
+
+
+class SchedulerView(Static):
+    def on_mount(self) -> None:
+        self.update(self.render_scheduler())
+
+    def render_scheduler(self) -> str:
+        db = _db()
+        rows = db.execute_read(
+            "SELECT id, name, task_description, cron_or_interval, status, created_at "
+            "FROM scheduler_jobs ORDER BY created_at DESC LIMIT 20"
+        )
+        runtime = AgentRuntime.get()
+        header = (
+            f"[b]Live queue[/b]: {runtime.status()['queue_size']} pending · "
+            f"worker {'running' if runtime.worker.running else 'idle'}\n\n"
+        )
+        if not rows:
+            return header + "[i]No scheduled jobs yet. Add one via CLI or Web UI.[/i]"
+        lines = [header + "[b]ID         Status      Interval  Name / Task[/b]"]
+        for r in rows:
+            lines.append(f"{r[0][:10]}  {r[4]:<10}  {str(r[3] or '-'):<8}  {str(r[1])[:20]} — {str(r[2])[:40]}")
         return "\n".join(lines)
 
 
@@ -74,10 +108,11 @@ class ApprovalsView(Static):
         lines = []
         for a in pending:
             lines.append(
-                f"[yellow]HIGH RISK[/yellow] {a['tool']}.{a['action']}\n"
+                f"[yellow]{a['risk']} RISK[/yellow] {a['tool']}.{a['action']}\n"
+                f"  ID: {a['id'][:10]}\n"
                 f"  Args: {a['args']}\n"
                 f"  Reason: {a['reason']}\n"
-                f"  [b]O[/b]=Allow once  [b]S[/b]=Allow session  [b]D[/b]=Deny\n"
+                f"  [b]O[/b]=Allow once  [b]Y[/b]=Allow session  [b]X[/b]=Deny (first pending)\n"
             )
         return "\n".join(lines)
 
@@ -85,8 +120,8 @@ class ApprovalsView(Static):
 class LogsView(Log):
     def on_mount(self) -> None:
         runtime = AgentRuntime.get()
-        for event_type in ("task_started", "task_completed", "task_failed",
-                           "tool_started", "tool_completed", "health"):
+        for event_type in ("task_started", "task_resumed", "task_completed", "task_failed",
+                           "tool_started", "tool_completed", "health", "scheduler_event"):
             runtime.event_bus.subscribe(event_type, self._on_event)
 
     def _on_event(self, event) -> None:
@@ -99,16 +134,21 @@ class LiteRTTUIApp(App):
     TITLE = "LiteRT Agent"
     CSS = """
     Screen { layout: horizontal; }
-    #sidebar { width: 24; border-right: solid $primary; padding: 1; }
+    #sidebar { width: 26; border-right: solid $primary; padding: 1; }
     #main { padding: 1 2; }
     """
 
     BINDINGS = [
         ("d", "view_dashboard", "Dashboard"),
         ("t", "view_tasks", "Tasks"),
+        ("s", "view_scheduler", "Scheduler"),
         ("a", "view_approvals", "Approvals"),
         ("l", "view_logs", "Logs"),
+        ("o", "decide_allow_once", "Allow once"),
+        ("y", "decide_allow_session", "Allow session"),
+        ("x", "decide_deny", "Deny"),
         ("p", "pause", "Pause"),
+        ("r", "resume", "Resume"),
         ("q", "quit", "Quit"),
     ]
 
@@ -118,9 +158,10 @@ class LiteRTTUIApp(App):
             with Vertical(id="sidebar"):
                 yield Static(
                     "[b]LITERT AGENT[/b]\n\n"
-                    " [b]D[/b] Dashboard\n [b]T[/b] Tasks\n [b]A[/b] Approvals\n"
+                    " [b]D[/b] Dashboard\n [b]T[/b] Tasks\n [b]S[/b] Scheduler\n [b]A[/b] Approvals\n"
                     " [b]L[/b] Logs\n\n"
-                    " [b]P[/b] Pause agent\n [b]Q[/b] Quit",
+                    " [b]O/Y/X[/b] Decide approval\n\n"
+                    " [b]P[/b] Pause agent\n [b]R[/b] Resume agent\n [b]Q[/b] Quit",
                     id="nav",
                 )
             with Vertical(id="main"):
@@ -135,11 +176,17 @@ class LiteRTTUIApp(App):
         content.remove_children()
         content.mount(widget)
 
+    def _notify(self, message: str) -> None:
+        self.query_one("#content").mount(Static(message))
+
     def action_view_dashboard(self) -> None:
         self._set_content(DashboardView())
 
     def action_view_tasks(self) -> None:
         self._set_content(TasksView())
+
+    def action_view_scheduler(self) -> None:
+        self._set_content(SchedulerView())
 
     def action_view_approvals(self) -> None:
         self._set_content(ApprovalsView())
@@ -148,13 +195,40 @@ class LiteRTTUIApp(App):
         logs = LogsView()
         self._set_content(logs)
 
+    def _decide_first(self, decision: str) -> None:
+        approvals = AgentRuntime.get().orchestrator.approval_manager
+        pending = approvals.list_pending()
+        if not pending:
+            self._notify("[green]No pending approvals to decide.[/green]")
+            return
+        approval = pending[0]
+        result = approvals.decide(approval["id"], decision)
+        if result is None:
+            self._notify(f"[red]Decision failed for {approval['id'][:8]}.[/red]")
+        else:
+            self._notify(f"[green]Recorded {result['status']} for {approval['tool']}.{approval['action']}.[/green]")
+        self.action_view_approvals()
+
+    def action_decide_allow_once(self) -> None:
+        self._decide_first("allow_once")
+
+    def action_decide_allow_session(self) -> None:
+        self._decide_first("allow")
+
+    def action_decide_deny(self) -> None:
+        self._decide_first("deny")
+
     def action_pause(self) -> None:
         runtime = AgentRuntime.get()
-        if runtime.started:
-            runtime.orchestrator.model_provider.timeout = runtime.orchestrator.model_provider.timeout  # no-op keeps provider
-        self.query_one("#content").mount(
-            Static("[yellow]Pause requested. Background jobs finish current step, then halt.[/yellow]")
-        )
+        runtime.worker.stop()
+        runtime.heartbeat.stop()
+        self._notify("[yellow]Paused: worker and heartbeat stopped. Background job finishes its current step, then halts. Press R to resume.[/yellow]")
+
+    def action_resume(self) -> None:
+        runtime = AgentRuntime.get()
+        runtime.worker.running = True
+        runtime.heartbeat.start()
+        self._notify("[green]Resumed: worker and heartbeat running again.[/green]")
 
 
 class TUIApp:
