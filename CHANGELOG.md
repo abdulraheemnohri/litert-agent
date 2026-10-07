@@ -10,6 +10,7 @@
 - Web UI pages: Chat, Agent, Scheduler, Workers, Diagnostics; task creation and
   checkpoint restore actions
 - Tests for scheduler queue registry and job worker lifecycle
+- TUI: scheduler view (S), approval decisions (O/Y/X), real pause/resume of worker and heartbeat
 - Approvals: Web UI Allow Once / Allow Session / Deny actions with decision history;
   CLI `security decide <id> <allow_once|allow|deny>`
 - Tests for the approval manager decision lifecycle
@@ -37,4 +38,5 @@
 ### Fixed
 - Broken imports in `runtime/loop.py` (cognition modules were missing)
 - Async `init_db` usage in recovery tests
-- Resource monitor usage in the API layer
+- Resource monitor usage in the API
+ layer
