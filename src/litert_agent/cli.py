@@ -5,14 +5,13 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from litert_agent.runtime.orchestrator import Orchestrator
+from litert_agent.runtime.service import AgentRuntime
 from litert_agent.environment.detector import EnvironmentDetector
 from litert_agent.environment.capabilities import Capabilities
 from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
@@ -43,12 +42,11 @@ def _print(data, as_json: bool):
 
 @app.command()
 def run(goal: str = typer.Argument(..., help="Goal or prompt for the autonomous agent")):
-    """Run an autonomous task."""
+    """Run an autonomous task on the shared runtime."""
 
     async def _run():
-        orchestrator = Orchestrator()
-        await orchestrator.initialize()
-        result = await orchestrator.run_task(goal)
+        runtime = AgentRuntime.get()
+        result = await runtime.run_task(goal)
         console.print(f"\n[bold blue]Result:[/bold blue]\n{result}")
 
     asyncio.run(_run())
@@ -58,6 +56,11 @@ def run(goal: str = typer.Argument(..., help="Goal or prompt for the autonomous 
 def chat():
     """Interactive chat loop with the agent."""
     console.print("[bold]LiteRT Agent chat (type 'exit' to quit)[/bold]")
+
+    async def _send(user_input: str) -> str:
+        runtime = AgentRuntime.get()
+        return await runtime.run_task(user_input)
+
     while True:
         try:
             user_input = input("You: ").strip()
@@ -67,49 +70,38 @@ def chat():
             break
         if not user_input:
             continue
-
-        async def _run():
-            orchestrator = Orchestrator()
-            await orchestrator.initialize()
-            result = await orchestrator.run_task(user_input)
-            console.print(f"Agent: {result}")
-
-        asyncio.run(_run())
+        result = asyncio.run(_send(user_input))
+        console.print(f"Agent: {result}")
 
 
 @app.command()
 def status(json_out: bool = typer.Option(False, "--json", help="Output JSON")):
-    """Show agent status."""
-    cfg = Config()
-    data = {
-        "agent": cfg.agent.name,
-        "status": "IDLE",
-        "autonomy_level": cfg.agent.autonomy_level,
-        "safe_mode": cfg.agent.safe_mode,
-        "offline_mode": cfg.agent.offline_mode,
-        "model_provider": "litert-cli",
-    }
+    """Show agent status (shared runtime state)."""
+    runtime = AgentRuntime.get()
+    data = runtime.status()
     if json_out:
         _print(data, True)
     else:
         console.print(Panel.fit(
             f"[bold]{data['agent']}[/bold]\n"
-            f"Status: {data['status']}\n"
+            f"Status: {'RUNNING' if data['started'] else 'IDLE'}\n"
             f"Autonomy: {data['autonomy_level']}\n"
-            f"Model: {data['model_provider']} (LiteRT-LM only)",
+            f"Model: {data['model_provider']} (LiteRT-LM only)\n"
+            f"Queue: {data['queue_size']}",
             title="Agent Status"))
 
 
 @app.command()
 def health(json_out: bool = typer.Option(False, "--json")):
     """Show runtime health and resources."""
+    runtime = AgentRuntime.get()
+    health = runtime.health()
     env = EnvironmentDetector.detect_all()
     data = {
+        "agent_health": health,
         "os": env["os"],
         "python": env["python_version"],
-        "git": env["has_git"],
         "litert_lm": env["has_litert_lm"],
-        "playwright": env["has_playwright"],
         "cpu_percent": env["resources"]["cpu_percent"],
         "memory": env["resources"]["memory"],
         "disk": env["resources"]["disk"],
@@ -118,9 +110,9 @@ def health(json_out: bool = typer.Option(False, "--json")):
         _print(data, True)
     else:
         console.print(Panel.fit(
+            f"Agent: {health['status']}\n"
             f"LiteRT-LM: {'[green]OK[/green]' if data['litert_lm'] else '[red]MISSING[/red]'}\n"
-            f"CPU: {data['cpu_percent']}%  RAM: {data['memory']['available_gb']}GB free  "
-            f"Disk: {data['disk']['free_gb']}GB free",
+            f"CPU: {data['cpu_percent']}%  RAM: {data['memory']['available_gb']}GB free",
             title="Health"))
 
 
@@ -153,6 +145,19 @@ def capabilities(json_out: bool = typer.Option(False, "--json")):
         _print(caps.model_dump(), True)
     else:
         console.print(caps.model_dump_json(indent=2))
+
+
+@app.command()
+def stop():
+    """Gracefully stop the shared runtime (kill switch)."""
+
+    async def _stop():
+        runtime = AgentRuntime.get()
+        result = await runtime.shutdown()
+        console.print_json(json.dumps(result, indent=2))
+
+    asyncio.run(_stop())
+    console.print("[green]Runtime stopped.[/green]")
 
 
 task_app = typer.Typer(help="Task management")
@@ -251,31 +256,35 @@ app.add_typer(tool_app, name="tool")
 @tool_app.command("list")
 def tool_list():
     """List registered tools."""
-    from litert_agent.tools.registry import ToolRegistry
-    from litert_agent.tools.terminal import TerminalTool
-    from litert_agent.tools.filesystem import FilesystemTool
-    from litert_agent.tools.python import PythonTool
-    from litert_agent.tools.git import GitTool
-    registry = ToolRegistry()
-    for tool in (TerminalTool(), FilesystemTool(), PythonTool(), GitTool()):
-        registry.register(tool)
+    runtime = AgentRuntime.get()
     table = Table(title="Tools")
     table.add_column("Name", style="cyan")
     table.add_column("Permission")
     table.add_column("Description")
-    for t in registry.list_tools():
+    for t in runtime.orchestrator.tool_registry.list_tools():
         table.add_row(t["name"], t["permission_level"], t["description"])
     console.print(table)
 
 
-schedule_app = typer.Typer(help="Scheduler")
-app.add_typer(schedule_app, name="schedule")
+@tool_app.command("test")
+def tool_test(name: str = typer.Argument(...)):
+    """Run a harmless smoke test against a tool."""
 
+    async def _test():
+        registry = AgentRuntime.get().orchestrator.tool_registry
+        smoke = {
+            "terminal": ("execute", {"command": "echo ok"}),
+            "filesystem": ("write", {"path": str(Config().agent.home_dir / "tool_test.txt"), "content": "ok"}),
+            "python": ("run", {"code": "print('ok')"}),
+        }
+        if name not in smoke:
+            console.print(f"[red]No smoke test defined for '{name}'[/red]")
+            return
+        action, args = smoke[name]
+        result = await registry.execute_tool(name, action, args)
+        console.print(f"[{'green' if result.success else 'red'}]{'PASS' if result.success else 'FAIL'}[/] {name}: {result.output or result.error}")
 
-@schedule_app.command("list")
-def schedule_list():
-    """List scheduler jobs (in-memory queue of current session)."""
-    console.print("[yellow]Scheduler jobs live in the running session; start via 'litert-agent web'.[/yellow]")
+    asyncio.run(_test())
 
 
 security_app = typer.Typer(help="Security")
@@ -285,12 +294,23 @@ app.add_typer(security_app, name="security")
 @security_app.command("status")
 def security_status():
     """Show security policy status."""
-    policy = SecurityPolicy()
     console.print(Panel.fit(
         "[green]ALLOW[/green] read operations, safe terminal commands\n"
         "[yellow]ASK[/yellow] package installs, protected paths\n"
         "[red]BLOCK[/red] sudo, rm -rf /, safe-mode writes",
         title="Security Policy"))
+
+
+@security_app.command("approvals")
+def security_approvals():
+    """Show pending approvals and history."""
+    approvals = AgentRuntime.get().orchestrator.approval_manager
+    pending = approvals.list_pending()
+    if not pending:
+        console.print("[green]No pending approvals.[/green]")
+        return
+    for a in pending:
+        console.print(f"[yellow]{a['id'][:8]}[/yellow] {a['tool']}.{a['action']} risk={a['risk']}: {a['reason']}")
 
 
 checkpoint_app = typer.Typer(help="Checkpoints")
@@ -334,9 +354,14 @@ def logs(limit: int = typer.Option(20, help="Number of log entries")):
 
 @app.command()
 def web(host: str = typer.Option("127.0.0.1"), port: int = typer.Option(8765)):
-    """Start the Web UI + API server."""
+    """Start the Web UI + API server (shared runtime)."""
     import uvicorn
     from litert_agent.api.app import app as api_app
+
+    async def _boot():
+        await AgentRuntime.get().start()
+
+    asyncio.run(_boot())
     console.print(f"[bold green]LiteRT Agent Web UI →[/bold green] http://{host}:{port}")
     uvicorn.run(api_app, host=host, port=port, log_level="warning")
 
@@ -354,10 +379,11 @@ def self_test():
     results = {}
     db = _db()
     results["database"] = bool(db.execute_read("SELECT name FROM sqlite_master WHERE type='table'"))
-    results["memory"] = bool(db.execute_read("SELECT * FROM memories LIMIT 1") is not None)
     results["checkpoints"] = isinstance(CheckpointManager(db).list_checkpoints(), list)
     results["skills"] = len(SkillRegistry(db).list_skills()) > 0
     results["litert_lm"] = EnvironmentDetector.detect_all()["has_litert_lm"]
+    runtime = AgentRuntime.get()
+    results["runtime"] = runtime.status()["model_provider"] == "litert-cli"
     for name, ok in results.items():
         console.print(f"[{'green' if ok else 'red'}]{'PASS' if ok else 'FAIL'}[/] {name}")
 
