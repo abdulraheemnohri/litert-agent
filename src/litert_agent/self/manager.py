@@ -192,7 +192,7 @@ class SelfManager:
             "snapshot": self.snapshot(),
             "research": {"missions": self.research.list_missions(), "sources": self.research.list_sources(), "findings": self.research.list_findings()},
             "goals": self.goals.list(),
-            "curiosity": self.goals.pop_curiosity(),
+            "curiosity": self.goals.peek_curiosity(),
         }
 
 
