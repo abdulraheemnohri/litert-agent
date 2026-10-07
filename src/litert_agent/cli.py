@@ -60,8 +60,7 @@ def run(
     offline: bool = typer.Option(False, "--offline", help="Disable network access"),
     profile: str = typer.Option("normal", "--profile", help="low-memory | normal | performance"),
     workspace: str = typer.Option(None, "--workspace", help="Working directory"),
-    
-autonomy: int = typer.Option(None, "--autonomy", help="Autonomy level 1-5"),
+    autonomy: int = typer.Option(None, "--autonomy", help="Autonomy level 1-5"),
 ):
     """Run an autonomous task on the shared runtime."""
 
@@ -119,8 +118,7 @@ def status(json_out: bool = typer.Option(False, "--json", help="Output JSON")):
             f"Status: {'RUNNING' if data['started'] else 'IDLE'}\n"
             f"Autonomy: {data['autonomy_level']}\n"
             f"Model: {data['model_provider']} (LiteRT-LM only)\n"
-            f"Queue: {d
-ata['queue_size']}",
+            f"Queue: {data['queue_size']}",
             title="Agent Status"))
 
 
@@ -174,8 +172,7 @@ def doctor():
 def capabilities(json_out: bool = typer.Option(False, "--json")):
     """List agent capabilities."""
     caps = Capabilities.discover()
-    if json_ou
-t:
+    if json_out:
         _print(caps.model_dump(), True)
     else:
         console.print(caps.model_dump_json(indent=2))
@@ -241,8 +238,7 @@ app.add_typer(memory_app, name="memory")
 
 @memory_app.command("list")
 def memory_list(json_out: bool = typer.Option(False, "--json")):
-    """List recent memorie
-s."""
+    """List recent memories."""
     db = _db()
     rows = db.execute_read("SELECT id, category, content, created_at FROM memories ORDER BY created_at DESC LIMIT 50")
     memories = [{"id": r[0], "category": r[1], "content": r[2], "created_at": r[3]} for r in rows]
@@ -303,8 +299,7 @@ def tool_list():
     table.add_column("Permission")
     table.add_column("Description")
     for t in runtime.orchestrator.tool_registry.list_tools():
-        table.add_row(t["name"], t[
-"permission_level"], t["description"])
+        table.add_row(t["name"], t["permission_level"], t["description"])
     console.print(table)
 
 
@@ -376,8 +371,7 @@ app.add_typer(checkpoint_app, name="checkpoint")
 
 @checkpoint_app.command("list")
 def checkpoint_list():
-   
- """List checkpoints."""
+    """List checkpoints."""
     mgr = CheckpointManager(_db())
     cps = mgr.list_checkpoints()
     if not cps:
@@ -434,8 +428,7 @@ def schedule_list(json_out: bool = typer.Option(False, "--json")):
 
 @schedule_app.command("add")
 def schedule_add(
-    name: str = typer.Argument(..., help="Job name"
-),
+    name: str = typer.Argument(..., help="Job name"),
     task: str = typer.Argument(..., help="Task description for the agent"),
     interval: str = typer.Option("", "--interval", help="Cron-like or interval description"),
 ):
@@ -487,8 +480,7 @@ def logs(limit: int = typer.Option(20, help="Number of log entries")):
     if not rows:
         console.print("[yellow]No logs yet.[/yellow]")
         return
-    for r
- in rows:
+    for r in rows:
         console.print(f"[dim]{r[3]}[/dim] [cyan]{r[1]}[/cyan] {r[2]}")
 
 
