@@ -103,6 +103,7 @@ class ResearchEngine:
             (finding_id, mission_id, source.id, topic[:500], claim, evidence,
              normalized, max(0.0, min(1.0, confidence)), time.time()),
         )
+        self.db.execute_write("UPDATE research_missions SET source_count = source_count + 1 WHERE id = ?", (mission_id,))
         if self.memory and status == "NEW":
             await self.memory.lessons.add_lesson(
                 f"research:{topic}:{source.source_hash[:16]}",
