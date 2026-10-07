@@ -230,16 +230,26 @@ const renderers = {
       '<div id="diag-box"></div>';
   },
   self: async () => {
-    const data = await api('/api/self');
+    const [data, overview, research, goals] = await Promise.all([
+      api('/api/self'), api('/api/self/overview'), api('/api/self/research'), api('/api/self/goals')
+    ]);
     const d = data.diagnostics || {};
     const rows = Object.entries(d.checks || {}).map(([k, v]) => [esc(k), badge(v ? 'PASS' : 'WARN')]);
     const maintenance = (data.maintenance || []).map(x => '<li><b>' + esc(x.action) + '</b> — ' + esc(x.reason) + '</li>').join('') || '<li>No maintenance proposals.</li>';
+    const goalRows = (goals.goals || []).map(g => [esc(g.priority), badge(g.status), esc((g.progress * 100).toFixed(0) + '%'), esc(g.title)]);
+    const missionRows = (research.missions || []).map(m => [badge(m.status), esc(m.topic), esc(m.source_count), esc(m.created_at)]);
+    const sourceRows = (research.sources || []).map(s => [esc(s.url), esc(s.trust), esc((s.credibility * 100).toFixed(0) + '%')]);
     return '<div class="grid">' +
       card('Identity', '<div class="metric">' + esc(data.identity.name) + '</div><small>' + esc(data.identity.mission) + '</small>') +
       card('Resources', '<div class="metric">' + esc(data.resources.memory_percent) + '% RAM</div><small>' + esc(data.resources.cpu_percent) + '% CPU · ' + esc(data.resources.disk_percent) + '% disk</small>') +
       card('Provider', '<div class="metric">LiteRT-LM CLI</div><small>No fallback backend</small>') +
+      card('Research', '<div class="metric">' + esc(research.sources.length) + '</div><small>provenance sources</small>') +
       '</div>' + card('Diagnostics', table(['Check', 'Status'], rows)) +
-      card('Bounded Maintenance', '<ul>' + maintenance + '</ul>');
+      card('Goals', goalRows.length ? table(['Priority','Status','Progress','Goal'], goalRows) : '<p>No goals.</p>') +
+      card('Research Missions', missionRows.length ? table(['Status','Topic','Sources','Created'], missionRows) : '<p>No missions.</p>') +
+      card('Research Sources', sourceRows.length ? table(['URL','Trust','Credibility'], sourceRows) : '<p>No sources.</p>') +
+      card('Bounded Maintenance', '<ul>' + maintenance + '</ul>') +
+      card('Safety', '<p>Internet content is untrusted evidence. Self-X cannot automatically modify model weights, security policy, or provider identity.</p>');
   },
   settings: async () => {
     const data = await api('/api/settings');

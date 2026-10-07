@@ -564,6 +564,66 @@ def self_snapshot(path: str = typer.Option(None, "--path"), json_out: bool = typ
     _print({"path": str(target)}, json_out)
 
 
+
+research_app = typer.Typer(help="Self-research and provenance")
+app.add_typer(research_app, name="research")
+
+@research_app.command("mission")
+def research_mission(topic: str, goal: str, url: list[str] = typer.Option(None, "--url")):
+    """Create a bounded research mission."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(manager.research_mission(topic, goal, url or []), False)
+
+@research_app.command("sources")
+def research_sources(json_out: bool = typer.Option(False, "--json")):
+    manager = AgentRuntime.get().orchestrator.self_manager
+    manager.initialize_learning()
+    _print({"sources": manager.research.list_sources()}, json_out)
+
+@research_app.command("findings")
+def research_findings(topic: str = typer.Option("", "--topic"), json_out: bool = typer.Option(False, "--json")):
+    manager = AgentRuntime.get().orchestrator.self_manager
+    manager.initialize_learning()
+    _print({"findings": manager.research.list_findings(topic)}, json_out)
+
+@research_app.command("compare")
+def research_compare(topic: str = typer.Option("", "--topic"), json_out: bool = typer.Option(False, "--json")):
+    manager = AgentRuntime.get().orchestrator.self_manager
+    manager.initialize_learning()
+    _print({"comparisons": manager.research.compare_claims(topic)}, json_out)
+
+goal_app = typer.Typer(help="Persistent Self-X goals and curiosity")
+app.add_typer(goal_app, name="goal")
+
+@goal_app.command("create")
+def goal_create(title: str, description: str, priority: str = typer.Option("NORMAL", "--priority"),
+                parent: str = typer.Option(None, "--parent"), goal_type: str = typer.Option("user", "--type")):
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(manager.create_goal(title, description, priority, parent, goal_type), False)
+
+@goal_app.command("list")
+def goal_list(status: str = typer.Option(None, "--status"), json_out: bool = typer.Option(False, "--json")):
+    manager = AgentRuntime.get().orchestrator.self_manager
+    manager.initialize_learning()
+    _print({"goals": manager.goals.list(status)}, json_out)
+
+@goal_app.command("curiosity")
+def goal_curiosity(topic: str, reason: str, priority: str = typer.Option("LOW", "--priority")):
+    manager = AgentRuntime.get().orchestrator.self_manager
+    manager.initialize_learning()
+    _print(manager.goals.enqueue_curiosity(topic, reason, priority), False)
+
+@goal_app.command("next-curiosity")
+def goal_next_curiosity(json_out: bool = typer.Option(False, "--json")):
+    manager = AgentRuntime.get().orchestrator.self_manager
+    manager.initialize_learning()
+    _print(manager.goals.pop_curiosity(), json_out)
+
+@self_app.command("overview")
+def self_overview(json_out: bool = typer.Option(False, "--json")):
+    """Show the complete Self-X overview."""
+    _print(AgentRuntime.get().orchestrator.self_manager.self_overview(), json_out)
+
 @app.command()
 def self_test():
     """Run self-tests over core subsystems."""
