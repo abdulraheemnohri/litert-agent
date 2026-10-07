@@ -16,7 +16,6 @@ from litert_agent.environment.detector import EnvironmentDetector
 from litert_agent.environment.capabilities import Capabilities
 from litert_agent.memory.sqlite import DatabaseManager, SCHEMA
 from litert_agent.skills.registry import SkillRegistry
-from litert_agent.security.policy import SecurityPolicy
 from litert_agent.recovery.checkpoints import CheckpointManager
 from litert_agent.config import Config
 from litert_agent.version import __version__
