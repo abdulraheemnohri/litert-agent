@@ -2,6 +2,7 @@
 
 from litert_agent.model.protocol import ProtocolMessage
 
+
 class ModelSession:
     def __init__(self, session_id: str):
         self.session_id = session_id

@@ -1,7 +1,7 @@
 """Binds the shared AgentRuntime to the API and WebSocket stream."""
 
-from litert_agent.runtime.service import AgentRuntime
 from litert_agent.api.websocket import manager as ws_manager
+from litert_agent.runtime.service import AgentRuntime
 
 
 async def get_runtime() -> "AgentRuntime":

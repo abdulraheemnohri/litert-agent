@@ -2,6 +2,7 @@
 
 import sqlite3
 from pathlib import Path
+
 from litert_agent.constants import DEFAULT_DB_PATH
 
 SCHEMA = """

@@ -3,8 +3,10 @@
 import json
 from datetime import datetime
 from pathlib import Path
+
 from litert_agent.constants import DEFAULT_LOG_DIR
 from litert_agent.security.secrets import SecretSanitizer
+
 
 class AuditLogger:
     def __init__(self, log_dir: Path = DEFAULT_LOG_DIR):

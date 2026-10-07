@@ -1,6 +1,7 @@
 """HTTP client tool with offline-mode enforcement."""
 
 import httpx
+
 from litert_agent.tools.base import BaseTool, ToolResult
 
 

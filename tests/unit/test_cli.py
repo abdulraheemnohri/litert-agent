@@ -1,6 +1,7 @@
 """Unit test for CLI."""
 
 from typer.testing import CliRunner
+
 from litert_agent.cli import app
 
 runner = CliRunner()

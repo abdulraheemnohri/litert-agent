@@ -1,12 +1,14 @@
 """Central Memory Manager."""
 
 from pathlib import Path
-from litert_agent.memory.sqlite import DatabaseManager
-from litert_agent.memory.working import WorkingMemory
+
 from litert_agent.memory.episodic import EpisodicMemory
-from litert_agent.memory.semantic import SemanticMemory
 from litert_agent.memory.lessons import LessonsMemory
+from litert_agent.memory.semantic import SemanticMemory
+from litert_agent.memory.sqlite import DatabaseManager
 from litert_agent.memory.tasks import TaskMemory
+from litert_agent.memory.working import WorkingMemory
+
 
 class MemoryManager:
     def __init__(self, db_path: Path):

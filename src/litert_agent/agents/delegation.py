@@ -5,6 +5,7 @@ from litert_agent.agents.worker import WorkerAgent
 from litert_agent.model.provider import ModelProvider
 from litert_agent.tools.registry import ToolRegistry
 
+
 class DelegationManager:
     def __init__(self, model_provider: ModelProvider, tool_registry: ToolRegistry):
         self.model_provider = model_provider

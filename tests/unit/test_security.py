@@ -1,9 +1,9 @@
 """Unit tests for security module."""
 
-import pytest
-from litert_agent.security.policy import SecurityPolicy, PermissionLevel
-from litert_agent.security.secrets import SecretSanitizer
+from litert_agent.security.policy import PermissionLevel, SecurityPolicy
 from litert_agent.security.sandbox import SandboxValidator
+from litert_agent.security.secrets import SecretSanitizer
+
 
 def test_security_policy():
     policy = SecurityPolicy(safe_mode=False)

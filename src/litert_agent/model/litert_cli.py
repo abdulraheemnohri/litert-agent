@@ -1,10 +1,12 @@
 """LiteRT-LM CLI Provider implementation."""
 
 import asyncio
-from litert_agent.model.provider import ModelProvider
-from litert_agent.model.protocol import ProtocolMessage
-from litert_agent.model.parser import ProtocolParser
+
 from litert_agent.model.discovery import LiteRTCLIDiscovery
+from litert_agent.model.parser import ProtocolParser
+from litert_agent.model.protocol import ProtocolMessage
+from litert_agent.model.provider import ModelProvider
+
 
 class LiteRTLMProvider(ModelProvider):
     def __init__(self, cli_path: str = "litert-lm", model_path: str = "", timeout: float = 120.0):
@@ -43,7 +45,7 @@ class LiteRTLMProvider(ModelProvider):
             if not out_str:
                 out_str = stderr.decode("utf-8", errors="replace").strip()
             return ProtocolParser.parse(out_str)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ProtocolMessage(type="error", content=f"LiteRT-LM execution timed out after {self.timeout}s")
         except Exception as e:
             return ProtocolMessage(type="error", content=f"LiteRT-LM execution error: {str(e)}")

@@ -5,6 +5,7 @@ import platform
 import shutil
 from pathlib import Path
 
+
 class PlatformInfo:
     @staticmethod
     def os_name() -> str:

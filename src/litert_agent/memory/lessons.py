@@ -1,7 +1,9 @@
 """Lessons learned memory store."""
 
 import uuid
+
 from litert_agent.memory.sqlite import DatabaseManager
+
 
 class LessonsMemory:
     def __init__(self, db_manager: DatabaseManager):

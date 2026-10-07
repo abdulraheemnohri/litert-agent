@@ -1,7 +1,9 @@
 """Unit tests for memory manager and sqlite memory subsystem."""
 
 import pytest
+
 from litert_agent.memory.manager import MemoryManager
+
 
 @pytest.mark.asyncio
 async def test_memory_manager_integration(tmp_path):

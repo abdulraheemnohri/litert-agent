@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel
 
+
 class AgentState(BaseModel):
     current_task_id: str | None = None
     status: str = "IDLE"

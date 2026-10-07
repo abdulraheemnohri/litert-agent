@@ -1,7 +1,9 @@
 """Episodic memory store."""
 
 import uuid
+
 from litert_agent.memory.sqlite import DatabaseManager
+
 
 class EpisodicMemory:
     def __init__(self, db_manager: DatabaseManager):

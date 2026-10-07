@@ -55,7 +55,16 @@ class SkillRegistry:
             if name in self.disabled:
                 continue
             keywords = name.replace("-", " ").split()
-            score = sum(1 for k in keywords if k in lowered)
+            desc = skill.get("description", "").lower()
+            score = sum(1 for k in keywords if k in lowered or k[:4] in lowered)
+            if any(k in lowered or (len(k) > 3 and k[:4] in lowered) for k in keywords):
+                score += 1
+            if name in lowered or (len(name) > 3 and name[:4] in lowered):
+                score += 2
+            # Also check if task words appear in description
+            for word in lowered.split():
+                if len(word) > 3 and word in desc:
+                    score += 1
             if score:
                 scored.append((score, skill))
         scored.sort(key=lambda x: -x[0])

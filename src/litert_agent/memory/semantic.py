@@ -1,7 +1,9 @@
 """Semantic facts store."""
 
 import uuid
+
 from litert_agent.memory.sqlite import DatabaseManager
+
 
 class SemanticMemory:
     def __init__(self, db_manager: DatabaseManager):

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+
 class SandboxValidator:
     def __init__(self, workspace_root: Path):
         self.workspace_root = workspace_root.resolve()

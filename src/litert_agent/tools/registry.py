@@ -2,6 +2,7 @@
 
 from litert_agent.tools.base import BaseTool, ToolResult
 
+
 class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, BaseTool] = {}

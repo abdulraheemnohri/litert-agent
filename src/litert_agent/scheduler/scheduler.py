@@ -1,8 +1,10 @@
 """Background worker and task scheduler."""
 
 import asyncio
-from litert_agent.scheduler.queue import JobQueue
+
 from litert_agent.scheduler.jobs import Job
+from litert_agent.scheduler.queue import JobQueue
+
 
 class BackgroundWorker:
     def __init__(self, queue: JobQueue):
@@ -16,7 +18,7 @@ class BackgroundWorker:
                 job = await asyncio.wait_for(self.queue.dequeue(), timeout=0.1)
                 job.status = "RUNNING"
                 job.status = "COMPLETED"
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             await asyncio.sleep(0.01)
 

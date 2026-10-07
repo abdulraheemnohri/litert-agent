@@ -1,7 +1,9 @@
 """Capabilities representation."""
 
 from pydantic import BaseModel
+
 from litert_agent.environment.detector import EnvironmentDetector
+
 
 class Capabilities(BaseModel):
     os: str

@@ -1,8 +1,10 @@
 """Events and event bus."""
 
-import asyncio
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
+
 from pydantic import BaseModel
+
 
 class AgentEvent(BaseModel):
     event_type: str

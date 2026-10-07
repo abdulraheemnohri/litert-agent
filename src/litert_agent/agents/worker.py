@@ -4,6 +4,7 @@ from litert_agent.agents.roles import AgentRole
 from litert_agent.model.provider import ModelProvider
 from litert_agent.tools.registry import ToolRegistry
 
+
 class WorkerAgent:
     def __init__(self, role: AgentRole, model_provider: ModelProvider, tool_registry: ToolRegistry):
         self.role = role

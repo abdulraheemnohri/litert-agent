@@ -3,6 +3,7 @@
 import asyncio
 import shutil
 
+
 class LiteRTCLIDiscovery:
     @staticmethod
     def find_executable(configured_path: str = "litert-lm") -> str | None:

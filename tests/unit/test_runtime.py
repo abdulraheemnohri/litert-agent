@@ -1,9 +1,11 @@
 """Integration test for orchestrator and autonomous loop."""
 
+
 import pytest
-from pathlib import Path
+
 from litert_agent.config import Config
 from litert_agent.runtime.orchestrator import Orchestrator
+
 
 @pytest.mark.asyncio
 async def test_orchestrator_loop_flow(tmp_path):

@@ -1,11 +1,13 @@
 """Unit tests for multi-agent and scheduler subsystems."""
 
 import pytest
-from litert_agent.agents.roles import AgentRole
+
 from litert_agent.agents.delegation import DelegationManager
+from litert_agent.agents.roles import AgentRole
 from litert_agent.model.litert_cli import LiteRTLMProvider
-from litert_agent.tools.registry import ToolRegistry
 from litert_agent.scheduler.scheduler import Scheduler
+from litert_agent.tools.registry import ToolRegistry
+
 
 @pytest.mark.asyncio
 async def test_multi_agent_delegation():

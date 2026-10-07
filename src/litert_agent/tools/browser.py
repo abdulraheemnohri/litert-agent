@@ -2,6 +2,7 @@
 
 from litert_agent.tools.base import BaseTool, ToolResult
 
+
 class BrowserTool(BaseTool):
     name = "browser"
     description = "Browser automation with Playwright"
