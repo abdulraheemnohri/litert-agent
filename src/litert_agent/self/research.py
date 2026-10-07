@@ -64,7 +64,7 @@ class ResearchEngine:
 
     @staticmethod
     def normalize_claim(text: str) -> str:
-        return re.sub(r"\\s+", " ", re.sub(r"<[^>]+>", " ", text)).strip().lower()[:2000]
+        return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text)).strip().lower()[:2000]
 
     async def fetch_source(self, url: str) -> SourceRecord:
         if not self.validate_url(url):
@@ -122,8 +122,19 @@ class ResearchEngine:
         for item in findings:
             key = self.normalize_claim(item["claim"])
             groups.setdefault(key, []).append(item)
-        return [{"claim": key, "support": items, "contradiction_candidates": []}
-                for key, items in groups.items() if len(items) > 1]
+        results = []
+        for key, items in groups.items():
+            contradictions = []
+            for i, left in enumerate(items):
+                for right in items[i + 1:]:
+                    l = left["claim"].lower()
+                    r = right["claim"].lower()
+                    left_negative = " not " in (" " + l + " ")
+                    right_negative = " not " in (" " + r + " ")
+                    if left_negative != right_negative:
+                        contradictions.append({"left": left["id"], "right": right["id"], "reason": "negation polarity"})
+            results.append({"claim": key, "support": items, "contradiction_candidates": contradictions})
+        return results
 
     def list_sources(self, limit: int = 50) -> list[dict]:
         rows = self.db.execute_read(
