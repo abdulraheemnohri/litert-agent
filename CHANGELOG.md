@@ -16,10 +16,7 @@
 - Tests for the approval manager decision lifecycle
 - Crash recovery integrated into the autonomous loop: snapshots keyed by goal,
   resumed automatically after a restart, cleared on completion or hard failure
-
-### Fixed
-- Broken `th,td` CSS rule (newline inside `solid`) in the Web UI stylesheet
-- Scheduler worker: re-queuing released jobs no longer leaves an un-awaited coroutine
+- CI: GitHub Actions workflow (ruff lint + pytest + wheel build), `.gitignore`, ruff config
 
 ## 0.1.0 — 2026-10-07
 
@@ -38,5 +35,4 @@
 ### Fixed
 - Broken imports in `runtime/loop.py` (cognition modules were missing)
 - Async `init_db` usage in recovery tests
-- Resource monitor usage in the API
- layer
+- Resource monitor usage in the API layer
