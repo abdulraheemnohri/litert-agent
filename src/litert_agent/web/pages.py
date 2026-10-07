@@ -6,6 +6,8 @@ BASE_DIR = Path(__file__).parent
 
 NAV_ITEMS = [
     ("dashboard", "Dashboard"),
+    ("chat", "Chat"),
+    ("agent", "Agent"),
     ("tasks", "Tasks"),
     ("memory", "Memory"),
     ("skills", "Skills"),

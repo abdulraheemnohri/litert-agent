@@ -17,7 +17,39 @@ function badge(status) {
   return '<span class="badge ' + cls + '">' + esc(status) + '</span>';
 }
 
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  const box = document.getElementById('chat-box');
+  box.insertAdjacentHTML('beforeend', '<div class="msg user"><b>You:</b> ' + esc(msg) + '</div>');
+  input.value = '';
+  fetch('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: msg})})
+    .then(r => r.json())
+    .then(data => {
+      box.insertAdjacentHTML('beforeend', '<div class="msg agent"><b>Agent:</b> ' + esc(data.reply) + '</div>');
+      box.scrollTop = box.scrollHeight;
+    })
+    .catch(e => box.insertAdjacentHTML('beforeend', '<div class="msg agent error">Error: ' + esc(e.message) + '</div>'));
+}
+
 const renderers = {
+  chat: async () => {
+    return card('Chat', '<div id="chat-box" style="height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--panel2)"></div>' +
+      '<div style="display:flex;gap:8px"><input id="chat-input" placeholder="Ask the agent..." style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)"><button onclick="sendChat()">Send</button></div>');
+  },
+  agent: async () => {
+    const [status, health] = await Promise.all([api('/api/status'), api('/api/health')]);
+    return card('Agent', '<table>' +
+      '<tr><td>Name</td><td>' + esc(status.agent) + '</td></tr>' +
+      '<tr><td>State</td><td>' + esc(status.started ? 'RUNNING' : 'IDLE') + '</td></tr>' +
+      '<tr><td>Autonomy</td><td>level ' + status.autonomy_level + '</td></tr>' +
+      '<tr><td>Safe mode</td><td>' + esc(status.safe_mode) + '</td></tr>' +
+      '<tr><td>Offline</td><td>' + esc(status.offline_mode) + '</td></tr>' +
+      '<tr><td>Model</td><td>' + esc(status.model_provider) + ' (LiteRT-LM only)</td></tr>' +
+      '<tr><td>Health</td><td>' + esc((health.model && health.model.status) || 'UNKNOWN') + '</td></tr>' +
+      '</table>');
+  },
   dashboard: async () => {
     const [status, health] = await Promise.all([api('/api/status'), api('/api/health')]);
     const r = health.resources;
@@ -36,7 +68,8 @@ const renderers = {
     let rows = data.tasks.map(t => '<tr><td>' + esc(t.id.slice(0,8)) + '</td><td>' + esc(t.description) + '</td><td>' + badge(t.status) + '</td><td>' + esc(t.created_at) + '</td></tr>').join('');
     return card('Tasks', '<table><tr><th>ID</th><th>Goal</th><th>Status</th><th>Created</th></tr>' + rows + '</table>');
   },
-  memory: async () => {
+  mem
+ory: async () => {
     const data = await api('/api/memory');
     if (!data.memories.length) return emptyState('No memories recorded yet.');
     let rows = data.memories.map(m => '<tr><td>' + esc(m.category) + '</td><td>' + esc(m.content) + '</td><td>' + esc(m.importance) + '</td><td>' + esc(m.created_at) + '</td></tr>').join('');
@@ -65,7 +98,8 @@ const renderers = {
     return card('Checkpoints', '<table><tr><th>ID</th><th>Description</th><th>Created</th></tr>' + rows + '</table>');
   },
   logs: async () => {
-    const data = await api('/api/logs');
+    const data = await api('/api/logs
+');
     if (!data.logs.length) return emptyState('No logs recorded yet.');
     return card('Logs', data.logs.map(l => '<div class="log-line">[' + esc(l.created_at) + '] ' + esc(l.type) + ' — ' + esc(l.payload) + '</div>').join(''));
   },
@@ -105,7 +139,8 @@ function emptyState(msg) {
   ws.onopen = () => { document.getElementById('conn-dot').classList.add('on'); document.getElementById('conn-text').textContent = 'agent connected'; };
   ws.onclose = () => { document.getElementById('conn-dot').classList.remove('on'); document.getElementById('conn-text').textContent = 'disconnected'; };
   ws.onmessage = (ev) => {
-    const box = document.getElementById('events');
+ 
+   const box = document.getElementById('events');
     if (box) {
       if (box.querySelector('.loading')) box.innerHTML = '';
       const line = document.createElement('div');

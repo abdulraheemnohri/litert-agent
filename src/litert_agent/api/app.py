@@ -19,6 +19,7 @@ from litert_agent.security.policy import SecurityPolicy
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.api.websocket import manager as ws_manager
 from litert_agent.api.schemas import TaskCreate, ApprovalDecision, SettingsUpdate
+from pydantic import BaseModel
 from litert_agent.api.runtime import get_runtime
 from litert_agent.web.pages import render_page
 
@@ -48,7 +49,7 @@ def _resource_snapshot() -> dict:
     }
 
 
-PAGES = ("dashboard", "tasks", "memory", "skills", "tools",
+PAGES = ("dashboard", "chat", "agent", "tasks", "memory", "skills", "tools",
          "approvals", "checkpoints", "system", "settings", "logs")
 
 
@@ -57,7 +58,8 @@ async def index():
     return render_page("dashboard")
 
 
-@app.get("/{page}", response_class=HTMLResponse)
+@app.get("/{page}", response_class=HTMLRespon
+se)
 async def generic_page(page: str):
     if page in PAGES:
         return render_page(page)
@@ -116,7 +118,8 @@ async def list_memory():
 
 @app.get("/api/skills")
 async def list_skills():
-    return {"skills": _skills.list_skills()}
+    return {"skills": _skills.list_skill
+s()}
 
 
 @app.get("/api/tools")
@@ -179,7 +182,8 @@ async def update_settings(update: SettingsUpdate):
     return {"status": "updated"}
 
 
-@app.websocket("/ws/events")
+@app.websocket("/ws/e
+vents")
 async def ws_events(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
