@@ -13,6 +13,8 @@
 - Approvals: Web UI Allow Once / Allow Session / Deny actions with decision history;
   CLI `security decide <id> <allow_once|allow|deny>`
 - Tests for the approval manager decision lifecycle
+- Crash recovery integrated into the autonomous loop: snapshots keyed by goal,
+  resumed automatically after a restart, cleared on completion or hard failure
 
 ### Fixed
 - Broken `th,td` CSS rule (newline inside `solid`) in the Web UI stylesheet

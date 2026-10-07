@@ -11,3 +11,9 @@
 
 ## Crash recovery
 `CrashRecovery` persists a `crash-<task_id>` snapshot (current step, plan, iteration) and on startup decides RESUME or PAUSE.
+
+The autonomous loop uses it directly: snapshots are keyed by a stable hash of the goal
+(so a restarted agent resumes the same task from its goal), progress is persisted after
+every iteration, and snapshots are cleared on completion or escalated failure. If the
+iteration budget runs out, the snapshot is kept so the next run resumes where it stopped.
+A `task_resumed` event is published on the event bus when a run continues from a snapshot.
