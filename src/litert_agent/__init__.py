@@ -1,0 +1,4 @@
+"""LiteRT Autonomous Agent Self-X."""
+
+__version__ = "0.1.0"
+__app_name__ = "litert-agent"
