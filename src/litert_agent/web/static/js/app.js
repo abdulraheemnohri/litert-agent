@@ -90,6 +90,15 @@ function restoreCheckpoint(cpId) {
     .catch(e => alert('Error: ' + e.message));
 }
 
+function decideApproval(approvalId, decision) {
+  post('/api/approvals/' + approvalId + '/approve', {decision: decision})
+    .then(r => {
+      if (r && r.error) { alert('Error: ' + r.error); return; }
+      location.reload();
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
+
 function runDiagnostics() {
   const box = document.getElementById('diag-box');
   box.innerHTML = '<div class="loading">Running diagnostics…</div>';
@@ -178,9 +187,19 @@ const renderers = {
   },
   approvals: async () => {
     const data = await api('/api/approvals');
-    if (!data.approvals.length) return emptyState('No pending approvals.');
-    return data.approvals.map(a => card('Approval ' + esc(String(a.id).slice(0, 8)),
-      esc(a.operation || a.description || '') + ' ' + badge(a.status || 'ASK'))).join('');
+    const pending = data.approvals.map(a => card('Approval ' + esc(String(a.id).slice(0, 8)),
+      '<p><b>' + esc(a.tool) + '.' + esc(a.action) + '</b> — ' + esc(a.reason) + '</p>' +
+      '<p><small>risk: ' + esc(a.risk) + ' · status: ' + esc(a.status) + '</small></p>' +
+      '<div style="display:flex;gap:8px">' +
+      '<button onclick="decideApproval(\'' + a.id + '\', \'allow_once\')">Allow Once</button>' +
+      '<button class="ghost" onclick="decideApproval(\'' + a.id + '\', \'allow\')">Allow Session</button>' +
+      '<button class="danger" onclick="decideApproval(\'' + a.id + '\', \'deny\')">Deny</button>' +
+      '</div>')).join('') || emptyState('No pending approvals.');
+    const hist = data.history && data.history.length
+      ? card('History', table(['ID', 'Tool', 'Decision', 'Decided'],
+          data.history.map(h => [esc(String(h.id).slice(0, 8)), esc(h.tool + '.' + h.action), badge(h.status === 'DENY' ? 'DENIED' : 'COMPLETED'), esc(h.decided_at || '')])))
+      : '';
+    return pending + hist;
   },
   checkpoints: async () => {
     const data = await api('/api/checkpoints');
