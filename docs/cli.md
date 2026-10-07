@@ -14,7 +14,7 @@
 | `memory list / search / forget` | Memory management |
 | `skill list` | Skills with usage stats |
 | `tool list / test <name>` | Registered tools + smoke tests |
-| `security status / approvals` | Policy summary and pending approvals |
+| `security status / approvals / decide` | Policy, pending approvals and decisions |
 | `checkpoint list / create` | Checkpoint management |
 | `schedule list / add / remove / run` | Persisted scheduler jobs |
 | `logs [--limit N]` | Recent events |
@@ -38,3 +38,12 @@ litert-agent schedule remove <job-id>
 
 `schedule run` executes the job's task description immediately on the shared
 runtime (LiteRT-LM only) and marks the job as completed.
+
+## Approvals
+
+When a tool call needs confirmation, it appears as a pending approval. Decide it via CLI or Web UI:
+
+```bash
+litert-agent security approvals
+litert-agent security decide <approval-id> allow_once   # also: allow (session), deny
+```
