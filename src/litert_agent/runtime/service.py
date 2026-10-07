@@ -53,6 +53,7 @@ class AgentRuntime:
             "offline_mode": self.config.agent.offline_mode,
             "model_provider": "litert-cli",
             "queue_size": self.queue.size(),
+            "self": self.orchestrator.self_manager.snapshot(),
         }
 
     def health(self) -> dict:
