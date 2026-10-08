@@ -1,5 +1,7 @@
-"""Self-management subsystem for LiteRT Agent."""
+"""Self-X subsystem: goals, curiosity, learning and self-reporting."""
+from litert_agent.self.curiosity import CuriosityEngine
+from litert_agent.self.goals import Goal, GoalManager, GoalState
+from litert_agent.self.learning import LearningEngine
+from litert_agent.self.report import generate_self_report
 
-from litert_agent.self.manager import SelfManager
-
-__all__ = ["SelfManager"]
+__all__ = ["CuriosityEngine", "Goal", "GoalManager", "GoalState", "LearningEngine", "generate_self_report"]
