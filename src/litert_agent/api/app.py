@@ -330,12 +330,30 @@ async def ingest_research_claim(payload: ResearchClaimCreate):
         payload.mission_id, payload.topic, payload.url, payload.claim, payload.evidence, payload.confidence
     )
 
+@app.post("/api/self/research/{mission_id}/collect")
+async def collect_self_research(mission_id: str):
+    runtime = await get_runtime()
+    return await runtime.orchestrator.self_manager.collect_research(mission_id)
+
+@app.get("/api/self/goals/{goal_id}/dependencies")
+async def self_goal_dependencies(goal_id: str):
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    return {"goal_id": goal_id, "ready": manager.goals.is_ready(goal_id),
+            "dependencies": manager.goals.dependencies(goal_id)}
+
+@app.post("/api/self/goals/generate-curiosity")
+async def generate_self_curiosity():
+    runtime = await get_runtime()
+    return {"created": runtime.orchestrator.self_manager.generate_curiosity()}
+
 @app.get("/api/self/goals")
 async def self_goals(status: str | None = None):
     runtime = await get_runtime()
     manager = runtime.orchestrator.self_manager
     manager.initialize_learning()
-    return {"goals": manager.goals.list(status), "curiosity": manager.goals.pop_curiosity()}
+    return {"goals": manager.goals.list(status), "curiosity": manager.goals.peek_curiosity()}
 
 class GoalCreate(BaseModel):
     title: str

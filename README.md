@@ -169,3 +169,8 @@ MIT — see `LICENSE`.
 ## Project Status
 
 Work in progress; see `CHANGELOG.md` for the latest changes.
+
+
+## Self-X
+
+The bounded self-management subsystem covers diagnostics, learning, research provenance, persistent goals, curiosity and safe skill lifecycle. See [docs/self-x.md](docs/self-x.md).
