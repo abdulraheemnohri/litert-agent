@@ -1,281 +1,68 @@
-// LiteRT Agent Web UI client — renders every page against the local agent API.
-const page = document.getElementById('main').dataset.page;
-const content = document.getElementById('content');
+/* LiteRT Agent Web Control Plane. No model fallback; UI calls the local API only. */
+const root=document.getElementById("main"), page=root.dataset.page, content=document.getElementById("content");
+const $=id=>document.getElementById(id);
+async function api(path,opts={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});if(!r.ok)throw Error("API "+r.status);return r.status===204?{}:r.json();}
+const get=p=>api(p); const post=(p,b={})=>api(p,{method:"POST",body:JSON.stringify(b)});
+const put=(p,b={})=>api(p,{method:"PUT",body:JSON.stringify(b)});
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=s=>s?new Date(s).toLocaleString():"—";
+const badge=s=>{const x=String(s??"UNKNOWN").toUpperCase();const c=["COMPLETED","PASS","READY","OK","ALLOW","RUNNING"].includes(x)?"ok":["FAILED","BLOCK","DENIED","ERROR"].includes(x)?"danger":["ASK","WARN","PAUSED","WAITING"].includes(x)?"warn":"info";return '<span class="badge '+c+'">'+esc(x)+'</span>'};
+function card(title,body,cls=""){return '<article class="card '+cls+'"><div class="card-head"><h3>'+esc(title)+'</h3></div>'+body+"</article>"}
+function metric(label,value,sub=""){return '<div class="metric-card"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(sub)+'</small></div>'}
+function table(head,rows,empty="No data"){return rows.length?'<div class="table-wrap"><table><thead><tr>'+head.map(x=>"<th>"+esc(x)+"</th>").join("")+'</tr></thead><tbody>'+rows.map(r=>"<tr>"+r.map(x=>"<td>"+x+"</td>").join("")+"</tr>").join("")+"</tbody></table></div>":'<div class="empty">'+esc(empty)+"</div>"}
+function buttons(items){return '<div class="actions">'+items.join("")+"</div>"}
+function btn(text,onclick,cls=""){return '<button class="btn '+cls+'" onclick="'+onclick+'">'+esc(text)+"</button>"}
+function toast(msg,bad=false){const n=document.createElement("div");n.className="toast "+(bad?"danger":"");n.textContent=msg;$("toast-region").appendChild(n);setTimeout(()=>n.remove(),3500)}
+function refreshPage(){load()}
+function toggleSidebar(){document.body.classList.toggle("nav-open")}
+function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==="light"?"dark":"light";localStorage.theme=document.documentElement.dataset.theme}
+if(localStorage.theme)document.documentElement.dataset.theme=localStorage.theme;
 
-async function api(path, options) {
-  const res = await fetch(path, options);
-  if (!res.ok) throw new Error('API ' + res.status);
-  return res.json();
-}
+async function sendChat(){const i=$("chat-input"),msg=i.value.trim();if(!msg)return;i.value="";$("chat-box").insertAdjacentHTML("beforeend",'<div class="chat user">'+esc(msg)+"</div>");$("chat-box").insertAdjacentHTML("beforeend",'<div class="chat agent pending">Working…</div>');try{const r=await post("/api/chat",{message:msg});$("chat-box").lastElementChild.className="chat agent";$("chat-box").lastElementChild.textContent=r.reply??r.result??"Completed";}catch(e){$("chat-box").lastElementChild.textContent=e.message;$("chat-box").lastElementChild.classList.add("error")}$("chat-box").scrollTop=$("chat-box").scrollHeight}
+async function createTask(e){e.preventDefault();const g=$("task-goal").value.trim();if(!g)return;try{await post("/api/tasks",{goal:g});toast("Task created");load()}catch(e){toast(e.message,true)}}
+async function runJob(id){try{await post("/api/scheduler/"+id+"/run");toast("Job queued")}catch(e){toast(e.message,true)}}
+async function restore(id){if(!confirm("Restore this checkpoint?"))return;try{await post("/api/checkpoints/"+id+"/restore");toast("Checkpoint restore requested");load()}catch(e){toast(e.message,true)}}
+async function decide(id,d){try{await post("/api/approvals/"+id+"/approve",{decision:d});toast("Approval updated");load()}catch(e){toast(e.message,true)}}
+async function runDiag(){const box=$("diag-box");box.innerHTML='<div class="loading">Running diagnostics…</div>';try{const d=await get("/api/diagnostics");box.innerHTML=card("Diagnostic Results",table(["Check","Result"],Object.entries(d.checks).map(([k,v])=>[esc(k),badge(String(v).startsWith("PASS")?"PASS":v)])));}catch(e){box.innerHTML='<div class="empty">'+esc(e.message)+"</div>"}}
+async function executeGoal(id){if(!confirm("Execute this goal through the normal policy/approval pipeline?"))return;try{const r=await post("/api/self/goals/"+id+"/execute");toast(r.status||"Goal execution requested");load()}catch(e){toast(e.message,true)}}
+async function synthesize(id){try{await post("/api/self/research/"+id+"/synthesize");toast("Research synthesized with LiteRT-LM");load()}catch(e){toast(e.message,true)}}
+async function collect(id){try{await post("/api/self/research/"+id+"/collect");toast("Research collection completed");load()}catch(e){toast(e.message,true)}}
 
-async function post(path, body) {
-  return api(path, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body || {}),
-  });
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function badge(status) {
-  const cls = {COMPLETED:'ok', PASS:'ok', READY:'ok', RUNNING:'info', PENDING:'info',
-               IDLE:'info', FAILED:'danger', BLOCK:'danger', DENIED:'danger', ASK:'warn'}[status] || 'info';
-  return '<span class="badge ' + cls + '">' + esc(status) + '</span>';
-}
-
-function card(title, body) {
-  return '<div class="card"><h3>' + esc(title) + '</h3>' + body + '</div>';
-}
-
-function emptyState(msg) {
-  return '<div class="card"><div class="loading">' + esc(msg) + '</div></div>';
-}
-
-function table(headers, rows) {
-  return '<table><tr>' + headers.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr>' +
-    rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</table>';
-}
-
-function sendChat() {
-  const input = document.getElementById('chat-input');
-  const msg = input.value.trim();
-  if (!msg) return;
-  const box = document.getElementById('chat-box');
-  box.insertAdjacentHTML('beforeend', '<div class="msg user"><b>You:</b> ' + esc(msg) + '</div>');
-  input.value = '';
-  box.insertAdjacentHTML('beforeend', '<div class="msg agent"><b>Agent:</b> <span class="loading">working…</span></div>');
-  box.scrollTop = box.scrollHeight;
-  post('/api/chat', {message: msg})
-    .then(data => {
-      box.lastElementChild.innerHTML = '<b>Agent:</b> ' + esc(data.reply);
-      box.scrollTop = box.scrollHeight;
-    })
-    .catch(e => {
-      box.lastElementChild.innerHTML = '<b>Agent:</b> <span class="error-text">Error: ' + esc(e.message) + '</span>';
-      box.scrollTop = box.scrollHeight;
-    });
-}
-
-function createTask(ev) {
-  ev.preventDefault();
-  const goal = document.getElementById('task-goal').value.trim();
-  if (!goal) return;
-  post('/api/tasks', {goal: goal})
-    .then(() => { location.reload(); })
-    .catch(e => alert('Error: ' + e.message));
-}
-
-function addJob(ev) {
-  ev.preventDefault();
-  const name = document.getElementById('job-name').value.trim();
-  const desc = document.getElementById('job-desc').value.trim();
-  if (!name || !desc) return;
-  post('/api/scheduler', {name: name, task_description: desc})
-    .then(() => { location.reload(); })
-    .catch(e => alert('Error: ' + e.message));
-}
-
-function runJob(jobId) {
-  post('/api/scheduler/' + jobId + '/run')
-    .then(() => alert('Job queued for execution.'))
-    .catch(e => alert('Error: ' + e.message));
-}
-
-function restoreCheckpoint(cpId) {
-  post('/api/checkpoints/' + cpId + '/restore')
-    .then(r => alert(r.restored ? 'Checkpoint restored.' : 'Checkpoint not found.'))
-    .catch(e => alert('Error: ' + e.message));
-}
-
-function decideApproval(approvalId, decision) {
-  post('/api/approvals/' + approvalId + '/approve', {decision: decision})
-    .then(r => {
-      if (r && r.error) { alert('Error: ' + r.error); return; }
-      location.reload();
-    })
-    .catch(e => alert('Error: ' + e.message));
-}
-
-function runDiagnostics() {
-  const box = document.getElementById('diag-box');
-  box.innerHTML = '<div class="loading">Running diagnostics…</div>';
-  api('/api/diagnostics')
-    .then(data => {
-      const rows = Object.entries(data.checks).map(([k, v]) => [esc(k), badge(String(v).startsWith('PASS') ? 'PASS' : String(v)) + ' <small>' + esc(v) + '</small>']);
-      box.innerHTML = card('Diagnostics', table(['Check', 'Result'], rows));
-    })
-    .catch(e => { box.innerHTML = emptyState('Error: ' + e.message); });
-}
-
-const renderers = {
-  dashboard: async () => {
-    const [status, health] = await Promise.all([api('/api/status'), api('/api/health')]);
-    const r = health.resources;
-    return '<div class="grid">' +
-      card('Agent', '<div class="metric">' + esc(status.started ? 'RUNNING' : 'IDLE') + '</div><small>autonomy level ' + esc(status.autonomy_level) + '</small>') +
-      card('Model (LiteRT-LM)', '<div class="metric">' + (health.model && health.model.checks && health.model.checks.model === 'READY' ? 'Ready' : 'Not detected') + '</div>') +
-      card('CPU', '<div class="metric">' + r.cpu_percent + '%</div>') +
-      card('Memory', '<div class="metric">' + r.memory.available_gb + ' GB<small> free of ' + r.memory.total_gb + ' GB</small></div>') +
-      card('Disk', '<div class="metric">' + r.disk.free_gb + ' GB<small> free</small></div>') +
-      '</div>' +
-      card('Live Events', '<div id="events"><div class="loading">waiting for events…</div></div>');
-  },
-  chat: async () => {
-    return card('Chat', '<div id="chat-box" style="height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--panel2)"></div>' +
-      '<div style="display:flex;gap:8px"><input id="chat-input" placeholder="Ask the agent..." style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)" onkeydown="if(event.key===\'Enter\')sendChat()"><button onclick="sendChat()">Send</button></div>');
-  },
-  agent: async () => {
-    const [status, health] = await Promise.all([api('/api/status'), api('/api/health')]);
-    return card('Agent', table(['Property', 'Value'], [
-      ['Name', esc(status.agent)],
-      ['State', badge(status.started ? 'RUNNING' : 'IDLE')],
-      ['Autonomy level', esc(status.autonomy_level)],
-      ['Safe mode', esc(status.safe_mode)],
-      ['Offline mode', esc(status.offline_mode)],
-      ['Model provider', esc(status.model_provider) + ' (LiteRT-LM only)'],
-      ['Queue size', esc(status.queue_size)],
-      ['Health', esc((health.model && health.model.status) || 'UNKNOWN')],
-    ]));
-  },
-  tasks: async () => {
-    const data = await api('/api/tasks');
-    const form = card('New Task', '<form onsubmit="createTask(event)"><div style="display:flex;gap:8px">' +
-      '<input id="task-goal" placeholder="Describe the task for the agent..." style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">' +
-      '<button type="submit">Create</button></div></form>');
-    if (!data.tasks.length) return form + emptyState('No tasks yet.');
-    const rows = data.tasks.map(t => [esc(t.id.slice(0, 8)), esc(t.description), badge(t.status), esc(t.created_at)]);
-    return form + card('Tasks', table(['ID', 'Goal', 'Status', 'Created'], rows));
-  },
-  scheduler: async () => {
-    const data = await api('/api/scheduler');
-    const form = card('Add Job', '<form onsubmit="addJob(event)">' +
-      '<input id="job-name" placeholder="Job name" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">' +
-      '<input id="job-desc" placeholder="Task description" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">' +
-      '<button type="submit">Add Job</button></form>');
-    if (!data.jobs.length) return form + emptyState('No scheduled jobs yet.');
-    const rows = data.jobs.map(j => [esc(j.id.slice(0, 8)), esc(j.name), esc(j.task_description), badge(j.status),
-      '<button class="ghost" onclick="runJob(\'' + j.id + '\')">Run Now</button>']);
-    return form + card('Jobs <small>queue: ' + data.queue_size + ' · worker: ' + (data.worker_running ? 'running' : 'idle') + '</small>',
-      table(['ID', 'Name', 'Task', 'Status', ''], rows));
-  },
-  workers: async () => {
-    const data = await api('/api/workers');
-    return '<div class="grid">' + data.workers.map(w =>
-      card(w.role, '<div class="metric">' + badge(w.status) + '</div>' +
-        '<small>completed: ' + esc(w.completed_jobs) + ' · queue: ' + esc(w.queue_size) + '</small>')
-    ).join('') + '</div>';
-  },
-  memory: async () => {
-    const data = await api('/api/memory');
-    if (!data.memories.length) return emptyState('No memories recorded yet.');
-    const rows = data.memories.map(m => [esc(m.category), esc(m.content), esc(m.importance), esc(m.created_at)]);
-    return card('Memory', table(['Category', 'Content', 'Importance', 'Created'], rows));
-  },
-  skills: async () => {
-    const data = await api('/api/skills');
-    return '<div class="grid">' + data.skills.map(s =>
-      card(s.name, esc(s.description) + '<br><small>tools: ' + esc((s.tools || []).join(', ')) + ' · v' + esc(s.version) + '</small><br>' + badge(s.enabled ? 'COMPLETED' : 'PENDING'))
-    ).join('') + '</div>';
-  },
-  tools: async () => {
-    const data = await api('/api/tools');
-    const rows = data.tools.map(t => [esc(t.name), esc(t.description), badge(t.permission_level)]);
-    return card('Tools', table(['Tool', 'Description', 'Permission'], rows));
-  },
-  approvals: async () => {
-    const data = await api('/api/approvals');
-    const pending = data.approvals.map(a => card('Approval ' + esc(String(a.id).slice(0, 8)),
-      '<p><b>' + esc(a.tool) + '.' + esc(a.action) + '</b> — ' + esc(a.reason) + '</p>' +
-      '<p><small>risk: ' + esc(a.risk) + ' · status: ' + esc(a.status) + '</small></p>' +
-      '<div style="display:flex;gap:8px">' +
-      '<button onclick="decideApproval(\'' + a.id + '\', \'allow_once\')">Allow Once</button>' +
-      '<button class="ghost" onclick="decideApproval(\'' + a.id + '\', \'allow\')">Allow Session</button>' +
-      '<button class="danger" onclick="decideApproval(\'' + a.id + '\', \'deny\')">Deny</button>' +
-      '</div>')).join('') || emptyState('No pending approvals.');
-    const hist = data.history && data.history.length
-      ? card('History', table(['ID', 'Tool', 'Decision', 'Decided'],
-          data.history.map(h => [esc(String(h.id).slice(0, 8)), esc(h.tool + '.' + h.action), badge(h.status === 'DENY' ? 'DENIED' : 'COMPLETED'), esc(h.decided_at || '')])))
-      : '';
-    return pending + hist;
-  },
-  checkpoints: async () => {
-    const data = await api('/api/checkpoints');
-    if (!data.checkpoints.length) return emptyState('No checkpoints yet.');
-    const rows = data.checkpoints.map(c => [esc(String(c.id).slice(0, 8)), esc(c.description || c.name || ''), esc(c.created_at),
-      '<button class="ghost" onclick="restoreCheckpoint(\'' + c.id + '\')">Restore</button>']);
-    return card('Checkpoints', table(['ID', 'Description', 'Created', ''], rows));
-  },
-  logs: async () => {
-    const data = await api('/api/logs');
-    if (!data.logs.length) return emptyState('No logs recorded yet.');
-    return card('Logs', data.logs.map(l => '<div class="log-line">[' + esc(l.created_at) + '] ' + esc(l.type) + ' — ' + esc(l.payload) + '</div>').join(''));
-  },
-  system: async () => {
-    const data = await api('/api/system');
-    const c = data.capabilities, r = data.resources;
-    const rows = [
-      ['OS', c.os], ['Python', c.python_version], ['Git', c.has_git ? 'installed' : 'missing'],
-      ['LiteRT-LM CLI', c.has_litert_lm ? 'installed' : 'missing'], ['Playwright', c.has_playwright ? 'installed' : 'missing'],
-      ['CPU', r.cpu_percent + '%'], ['RAM', r.memory.used_percent + '% used'],
-      ['Disk', r.disk.used_percent + '% used'],
-    ].map(x => [esc(x[0]), esc(x[1])]);
-    return card('System', table(['Component', 'Status / Value'], rows));
-  },
-  diagnostics: async () => {
-    return card('Diagnostics', '<p>Run the built-in self-diagnostics: database, skills registry, model and runtime checks.</p>' +
-      '<button onclick="runDiagnostics()">Run Diagnostics</button>') +
-      '<div id="diag-box"></div>';
-  },
-  self: async () => {
-    const [data, overview, research, goals] = await Promise.all([
-      api('/api/self'), api('/api/self/overview'), api('/api/self/research'), api('/api/self/goals')
-    ]);
-    const d = data.diagnostics || {};
-    const rows = Object.entries(d.checks || {}).map(([k, v]) => [esc(k), badge(v ? 'PASS' : 'WARN')]);
-    const maintenance = (data.maintenance || []).map(x => '<li><b>' + esc(x.action) + '</b> — ' + esc(x.reason) + '</li>').join('') || '<li>No maintenance proposals.</li>';
-    const goalRows = (goals.goals || []).map(g => [esc(g.priority), badge(g.status), esc((g.progress * 100).toFixed(0) + '%'), esc(g.title)]);
-    const missionRows = (research.missions || []).map(m => [badge(m.status), esc(m.topic), esc(m.source_count), esc(m.created_at)]);
-    const sourceRows = (research.sources || []).map(s => [esc(s.url), esc(s.trust), esc((s.credibility * 100).toFixed(0) + '%')]);
-    return '<div class="grid">' +
-      card('Identity', '<div class="metric">' + esc(data.identity.name) + '</div><small>' + esc(data.identity.mission) + '</small>') +
-      card('Resources', '<div class="metric">' + esc(data.resources.memory_percent) + '% RAM</div><small>' + esc(data.resources.cpu_percent) + '% CPU · ' + esc(data.resources.disk_percent) + '% disk</small>') +
-      card('Provider', '<div class="metric">LiteRT-LM CLI</div><small>No fallback backend</small>') +
-      card('Research', '<div class="metric">' + esc(research.sources.length) + '</div><small>provenance sources</small>') +
-      '</div>' + card('Diagnostics', table(['Check', 'Status'], rows)) +
-      card('Goals', goalRows.length ? table(['Priority','Status','Progress','Goal'], goalRows) : '<p>No goals.</p>') +
-      card('Research Missions', missionRows.length ? table(['Status','Topic','Sources','Created'], missionRows) : '<p>No missions.</p>') +
-      card('Research Sources', sourceRows.length ? table(['URL','Trust','Credibility'], sourceRows) : '<p>No sources.</p>') +
-      card('Bounded Maintenance', '<ul>' + maintenance + '</ul>') +
-      card('Safety', '<p>Internet content is untrusted evidence. Self-X cannot automatically modify model weights, security policy, or provider identity.</p>');
-  },
-  settings: async () => {
-    const data = await api('/api/settings');
-    return card('Configuration', '<pre style="font-size:12px;white-space:pre-wrap">' + esc(JSON.stringify(data.config, null, 2)) + '</pre>');
-  },
+const render={
+dashboard:async()=>{const[s,h,t]=await Promise.all([get("/api/status"),get("/api/health"),get("/api/tasks")]);const r=h.resources||{};return '<div class="metric-grid">'+metric("Agent",s.started?"RUNNING":"IDLE","autonomy "+s.autonomy_level)+metric("Model",(h.model?.checks?.model||"UNKNOWN"),"LiteRT-LM CLI only")+metric("CPU",(r.cpu_percent??0)+"%","current load")+metric("RAM",(r.memory?.used_percent??0)+"%","used")+metric("Tasks",t.tasks.length,"recent tasks")+"</div>"+card("Control Center",'<div class="hero-grid"><div><span class="eyebrow">AUTONOMOUS LOOP</span><h2>Observe → Plan → Policy → Execute → Verify → Reflect</h2><p class="muted">Every tool action remains inside the security and approval boundary.</p></div>'+buttons([btn("Open Tasks","location.href='/tasks'"),btn("Diagnostics","location.href='/diagnostics'","secondary")])+"</div>")+card("Live Event Stream",'<div id="events" class="event-stream">Waiting for runtime events…</div>')},
+chat:async()=>card("Agent Chat",'<div class="chat-layout"><div id="chat-box" class="chat-box"><div class="chat system">Operational chat. Hidden reasoning is never exposed.</div></div><form class="chat-form" onsubmit="event.preventDefault();sendChat()"><input id="chat-input" autocomplete="off" placeholder="Give the agent a goal…"><button class="btn">Send</button></form></div>'),
+agent:async()=>{const[s,h]=await Promise.all([get("/api/status"),get("/api/health")]);return '<div class="metric-grid">'+metric("State",s.started?"RUNNING":"IDLE","runtime")+metric("Autonomy",s.autonomy_level,"configured level")+metric("Queue",s.queue_size,"pending work")+metric("Safe mode",s.safe_mode?"ON":"OFF","policy guard")+"</div>"+card("Agent Identity",table(["Property","Value"],[["Name",esc(s.agent)],["Provider","LiteRT-LM CLI"],["Offline",esc(s.offline_mode)],["Health",badge(h.status||"UNKNOWN")]]))},
+tasks:async()=>{const d=await get("/api/tasks");return card("Create Task",'<form class="inline-form" onsubmit="createTask(event)"><input id="task-goal" placeholder="Describe a task…"><button class="btn">Create</button></form>')+card("Task Queue",table(["ID","Goal","Status","Created"],d.tasks.map(t=>['<a href="/tasks?id='+esc(t.id)+'">'+esc(t.id.slice(0,8))+"</a>",esc(t.description||t.title),badge(t.status),esc(fmt(t.created_at))])))},
+plans:async()=>{const d=await get("/api/tasks");return card("Plans & Verification",'<p class="muted">Plans are generated by the cognition layer and executed through the same policy pipeline. Select a task to inspect its persisted state.</p>'+table(["Task","State","Inspection"],d.tasks.map(t=>[esc(t.title||t.id),badge(t.status),'<a class="btn-link" href="/tasks?id='+esc(t.id)+'">Open task</a>])))} ,
+live:async()=>card("Live Execution",'<div class="live-grid"><div><span class="eyebrow">RUNTIME STREAM</span><h2>Event-driven execution</h2><p class="muted">Connect to the shared WebSocket event bus. The UI does not display hidden chain-of-thought.</p></div><div id="live-events" class="event-stream">Waiting…</div></div>'),
+memory:async()=>{const d=await get("/api/memory");return card("Memory",'<div class="toolbar"><input id="memory-filter" placeholder="Filter loaded memories…" oninput="filterRows(this.value)"></div>'+table(["Category","Content","Importance","Created"],d.memories.map(m=>[esc(m.category),'<a href="/memory?id='+esc(m.id)+'">'+esc(m.content)+'</a>',esc(m.importance),esc(fmt(m.created_at))])))},
+memory_detail:async()=>{const id=new URLSearchParams(location.search).get("id");const d=await get("/api/memory");const m=d.memories.find(x=>x.id===id);return m?card("Memory Detail",table(["Field","Value"],Object.entries(m).map(([k,v])=>[esc(k),esc(v)]))):'<div class="empty">Memory not found.</div>'},
+skills:async()=>{const d=await get("/api/skills");return card("Skill Registry",table(["Skill","Version","Enabled","Tools"],d.skills.map(s=>[esc(s.name),esc(s.version),badge(s.enabled?"READY":"PAUSED"),esc((s.tools||[]).join(", "))])))},
+skill_detail:async()=>card("Skill Detail",'<p class="muted">Select a skill from the registry to inspect its manifest, validation status, permissions and version history. Self-generated skills require explicit approval.</p>'),
+tools:async()=>{const d=await get("/api/tools");return card("Tool Registry",table(["Tool","Description","Permission"],d.tools.map(t=>[esc(t.name),esc(t.description),badge(t.permission_level||"ASK")])))},
+tool_detail:async()=>card("Tool Detail",'<p class="muted">Tool execution is never exposed as an unrestricted browser shell. Requests pass through policy, permission, approval and audit controls.</p>'),
+workers:async()=>{const d=await get("/api/workers");return '<div class="metric-grid">'+metric("Workers",d.workers.length,"logical roles")+metric("Queue",d.queue_size,"shared queue")+"</div>"+card("Worker Pool",table(["Role","Status","Completed","Queue"],d.workers.map(w=>[esc(w.role),badge(w.status),esc(w.completed_jobs),esc(w.queue_size)])))},
+scheduler:async()=>{const d=await get("/api/scheduler");return card("Schedule Job",'<form class="stack-form" onsubmit="event.preventDefault();addSchedule()"><input id="job-name" placeholder="Name"><input id="job-desc" placeholder="Task description"><button class="btn">Add Job</button></form>')+card("Scheduler",table(["Job","Task","Schedule","Status","Action"],d.jobs.map(j=>[esc(j.name),esc(j.task_description),esc(j.cron_or_interval||"manual"),badge(j.status),btn("Run","runJob(\''+j.id+'\')","secondary")])))},
+browser:async()=>card("Browser Control",'<div class="notice">Playwright browser operations are exposed through the agent tool registry. Navigation, clicks, downloads and screenshots must still obey network/tool policy.</div>'+table(["Capability","Policy"],[["Navigate","ASK for external network"],["Extract","ALLOW/ASK by policy"],["Download","ASK"],["Automation","Policy + approval"],["Credentials","BLOCK by default"]])),
+research:async()=>{const d=await get("/api/self/research");return card("Research Missions",table(["Topic","Status","Sources","Action"],d.missions.map(m=>[esc(m.topic),badge(m.status),esc(m.source_count),buttons([btn("Collect","collect(\''+m.id+'\')","secondary"),btn("Synthesize","synthesize(\''+m.id+'\')")])]))+card("Evidence Sources",table(["URL","Trust","Credibility"],d.sources.map(s=>[esc(s.url),badge(s.trust),esc(Math.round((s.credibility||0)*100)+"%")])))},
+goals:async()=>{const d=await get("/api/self/goals");return card("Goal Queue",table(["Priority","Status","Progress","Goal","Action"],d.goals.map(g=>[badge(g.priority),badge(g.status),esc(Math.round((g.progress||0)*100)+"%"),esc(g.title),btn("Execute","executeGoal(\''+g.id+'\')")])))+card("Curiosity Queue",table(["Topic","Reason","Priority"],(d.curiosity||[]).map(c=>[esc(c.topic),esc(c.reason),badge(c.priority)]),"No curiosity items."))},
+approvals:async()=>{const d=await get("/api/approvals");return card("Approval Center",d.approvals.length?d.approvals.map(a=>'<div class="approval"><div><b>'+esc(a.tool)+"."+esc(a.action)+"</b><p>"+esc(a.reason)+"</p><small>risk "+esc(a.risk)+"</small></div>"+buttons([btn("Allow Once","decide(\''+a.id+"\',\'allow_once\')"),btn("Allow Session","decide(\''+a.id+"\',\'allow\')","secondary"),btn("Deny","decide(\''+a.id+"\',\'deny\')","danger")])+"</div>").join(""):'<div class="empty">No pending approvals.</div>')},
+security:async()=>{const d=await get("/api/settings");const s=d.config.security||{};return card("Security Policy",'<div class="notice danger-border">Security policy is outside Self-X evolution. Changing it should be deliberate and auditable.</div>'+table(["Section","Configuration"],Object.entries(s).map(([k,v])=>[esc(k),'<code>'+esc(JSON.stringify(v))+"</code>"])) )},
+checkpoints:async()=>{const d=await get("/api/checkpoints");return card("Recovery Checkpoints",table(["ID","Description","Created","Action"],d.checkpoints.map(c=>[esc(String(c.id).slice(0,8)),esc(c.description||c.name),esc(fmt(c.created_at)),btn("Restore","restore(\''+c.id+'\')","secondary")])))},
+audit:async()=>{const d=await get("/api/logs");return card("Audit / Event History",table(["Time","Event","Payload"],d.logs.map(l=>[esc(fmt(l.created_at)),badge(l.type),'<code>'+esc(l.payload)+'</code>'])))},
+logs:async()=>{const d=await get("/api/logs");return card("Runtime Logs",'<div class="log-viewer">'+d.logs.map(l=>'<div><span>'+esc(fmt(l.created_at))+"</span> <b>"+esc(l.type)+"</b> "+esc(l.payload)+"</div>").join("")+"</div>")},
+system:async()=>{const d=await get("/api/system"),c=d.capabilities,r=d.resources;return '<div class="metric-grid">'+metric("OS",c.os||"unknown","environment")+metric("Python",c.python_version||"unknown","runtime")+metric("CPU",(r.cpu_percent??0)+"%","load")+metric("RAM",(r.memory?.used_percent??0)+"%","used")+metric("Disk",(r.disk?.used_percent??0)+"%","used")+"</div>"+card("Capabilities",table(["Capability","State"],Object.entries(c).map(([k,v])=>[esc(k),esc(v)])))},
+model:async()=>{const[c,h]=await Promise.all([get("/api/capabilities"),get("/api/health")]);return card("LiteRT-LM Model Bus",'<div class="notice">This project intentionally has exactly one inference backend: LiteRT-LM CLI. There is no silent provider fallback.</div>'+table(["Capability","Value"],Object.entries(c).filter(([k])=>/litert|model|python/i.test(k)).map(([k,v])=>[esc(k),esc(v)])))+card("Health",'<pre>'+esc(JSON.stringify(h.model,null,2))+"</pre>")},
+diagnostics:async()=>card("Diagnostics",'<p class="muted">Run bounded checks for database, skills, runtime and LiteRT-LM readiness.</p>'+btn("Run Diagnostics","runDiag()")+'<div id="diag-box" class="mt"></div>'),
+settings:async()=>{const d=await get("/api/settings");return card("Configuration",'<div class="settings-grid">'+Object.entries(d.config).map(([k,v])=>'<div class="setting"><b>'+esc(k)+'</b><pre>'+esc(JSON.stringify(v,null,2))+"</pre></div>").join("")+"</div>")},
+self:async()=>{const[d,o,r,g]=await Promise.all([get("/api/self"),get("/api/self/overview"),get("/api/self/research"),get("/api/self/goals")]);return '<div class="metric-grid">'+metric("Identity",d.identity?.name||"Self-X","bounded self-awareness")+metric("Research",r.sources?.length||0,"evidence sources")+metric("Goals",g.goals?.length||0,"persistent goals")+metric("Provider","LiteRT-LM","no fallback")+"</div>"+card("Self-X Safety",'<div class="notice">Internet content is untrusted evidence. Self-X cannot modify model weights, security policy or provider identity automatically.</div>')+card("Diagnostics",table(["Check","State"],Object.entries(d.diagnostics?.checks||{}).map(([k,v])=>[esc(k),badge(v?"PASS":"WARN")])))+card("Maintenance Proposals",(d.maintenance||[]).map(x=>'<div class="proposal"><b>'+esc(x.action)+"</b><span>"+esc(x.reason)+"</span></div>").join("")||'<div class="empty">No proposals.</div>')+card("Overview",'<pre>'+esc(JSON.stringify(o,null,2))+"</pre>")}
 };
-
-(async () => {
-  try {
-    content.innerHTML = await (renderers[page] || (async () => emptyState('Unknown page')))();
-  } catch (e) {
-    content.innerHTML = emptyState('Error: ' + e.message);
-  }
-  // websocket
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(proto + '://' + location.host + '/ws/events');
-  ws.onopen = () => { document.getElementById('conn-dot').classList.add('on'); document.getElementById('conn-text').textContent = 'agent connected'; };
-  ws.onclose = () => { document.getElementById('conn-dot').classList.remove('on'); document.getElementById('conn-text').textContent = 'disconnected'; };
-  ws.onmessage = (ev) => {
-    const box = document.getElementById('events');
-    if (box) {
-      if (box.querySelector('.loading')) box.innerHTML = '';
-      const line = document.createElement('div');
-      line.className = 'log-line';
-      line.textContent = ev.data;
-      box.prepend(line);
-    }
-  };
-})();
+render["tasks_detail"]=render.memory_detail; render["memory_detail"]=render.memory_detail;
+async function load(){try{content.innerHTML=await (render[page]||render.dashboard)()}catch(e){content.innerHTML='<div class="error-panel"><b>Page failed to load</b><p>'+esc(e.message)+"</p></div>"}}
+function addSchedule(){const n=$("job-name").value.trim(),d=$("job-desc").value.trim();if(!n||!d)return;post("/api/scheduler",{name:n,task_description:d}).then(()=>{toast("Job added");load()}).catch(e=>toast(e.message,true))}
+function filterRows(q){document.querySelectorAll("tbody tr").forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?"":"none")}
+const ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host+"/ws/events");
+ws.onopen=()=>{ $("side-dot").classList.add("on");$("side-status").textContent="Connected";$("runtime-status").textContent="runtime connected" };
+ws.onclose=()=>{ $("side-dot").classList.remove("on");$("side-status").textContent="Disconnected";$("runtime-status").textContent="event stream disconnected" };
+ws.onmessage=e=>{const box=$("events")||$("live-events");if(box){if(box.textContent.includes("Waiting"))box.innerHTML="";const d=document.createElement("div");d.className="event";d.textContent=e.data;box.prepend(d)}};
+load();
