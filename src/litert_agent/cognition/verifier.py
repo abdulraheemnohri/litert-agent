@@ -1,12 +1,29 @@
-"""Verifier: checks tool results against expectations."""
+"""Execution verification contracts for bounded autonomous actions."""
+
+from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
 from litert_agent.tools.base import ToolResult
 
 
+@dataclass(frozen=True)
+class VerificationContract:
+    checks: tuple[str, ...] = field(default_factory=tuple)
+
+    @classmethod
+    def from_requests(cls, requests: list[str] | None) -> "VerificationContract":
+        cleaned = tuple(
+            item.strip()[:500]
+            for item in (requests or [])
+            if isinstance(item, str) and item.strip()
+        )
+        return cls(cleaned[:16])
+
+
 class Verifier:
-    """Verifies execution results."""
+    """Verifies execution results against explicit, bounded expectations."""
 
     def verify_action(self, tool_result: ToolResult) -> bool:
         return bool(tool_result.success)
@@ -20,3 +37,30 @@ class Verifier:
 
     def verify_file_content(self, content: str, expected: str) -> bool:
         return expected in content
+
+    def verify_contract(
+        self, tool_result: ToolResult, contract: VerificationContract
+    ) -> tuple[bool, list[str]]:
+        if not tool_result.success:
+            return False, [tool_result.error or "tool execution failed"]
+        output = tool_result.output or ""
+        failures: list[str] = []
+        for check in contract.checks:
+            if check.lower().startswith("contains:"):
+                expected = check.split(":", 1)[1].strip()
+                if expected and expected not in output:
+                    failures.append(f"missing expected output: {expected[:200]}")
+            elif check.lower().startswith("not_contains:"):
+                forbidden = check.split(":", 1)[1].strip()
+                if forbidden and forbidden in output:
+                    failures.append(f"forbidden output present: {forbidden[:200]}")
+            elif check.lower().startswith("regex:"):
+                pattern = check.split(":", 1)[1].strip()
+                try:
+                    if not re.search(pattern, output):
+                        failures.append("regex verification failed")
+                except re.error:
+                    failures.append("invalid regex verification request")
+            else:
+                failures.append(f"unsupported verification check: {check[:200]}")
+        return not failures, failures
