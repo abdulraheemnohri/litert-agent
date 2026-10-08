@@ -3,9 +3,14 @@
 The Self-X subsystem gives the agent direction and improvement without ever
 touching its own safety boundaries.
 
+> Self-X tables are namespaced with a `self_x_` prefix (e.g.
+> `self_x_goals`, `self_x_curiosity`, `self_x_lessons`) so they never
+> collide with the canonical tables created by `memory/sqlite.py` in the
+> same shared database.
+
 ## Goal manager
 
-Goals persist in the `goals` SQLite table with the full state machine:
+Goals persist in the `self_x_goals` SQLite table with the full state machine:
 
 ```
 IDEA → PENDING → READY → ACTIVE → VERIFYING → COMPLETED
@@ -16,6 +21,8 @@ IDEA → PENDING → READY → ACTIVE → VERIFYING → COMPLETED
 - High-risk goals (`medium`/`high`/`critical`) are created in
   `WAITING_APPROVAL` and cannot run until approved.
 - Dependencies block execution until the parent goals are completed.
+- `SelfManager` wires goals to real autonomous execution through
+  `GoalExecutionController`.
 
 CLI (via `litert-agent-self`):
 
@@ -57,3 +64,8 @@ Experience → Evaluation → Lesson → Confidence → Memory
 litert-agent-self learn
 litert-agent-self report
 ```
+
+## Safety contract
+
+Self-improvement may never modify security policy, permissions, approvals,
+audit, or the LiteRT-LM-only model rule (A-to-Z spec section 19).
