@@ -16,6 +16,7 @@ from litert_agent.self.autonomy import AutonomousSelfController
 from litert_agent.self.web_learning import WebLearningEngine
 from litert_agent.self.research import ResearchEngine
 from litert_agent.self.goals import GoalManager
+from litert_agent.self.goal_execution import GoalExecutionController
 from litert_agent.skills.registry import SkillRegistry
 from litert_agent.skills.validator import SkillValidator
 
@@ -40,6 +41,7 @@ class SelfManager:
         self.web_learning = None
         self.research = None
         self.goals = None
+        self.goal_execution = None
 
     def identity(self) -> dict:
         return {
@@ -149,6 +151,7 @@ class SelfManager:
             self.web_learning = WebLearningEngine(self.orchestrator.tool_registry.get("http"), self.orchestrator.memory)
             self.research = ResearchEngine(self.orchestrator.memory.db_manager, self.orchestrator.tool_registry.get("http"), self.orchestrator.memory)
             self.goals = GoalManager(self.orchestrator.memory.db_manager)
+            self.goal_execution = GoalExecutionController(self)
 
     async def learn(self, task_id, success, observation, lesson=""):
         if self.learning is None:
@@ -201,6 +204,26 @@ class SelfManager:
         return self.goals.generate_curiosity_from_stale(
             self.config.self.knowledge_stale_after_days * 86400
         )
+
+    def ready_goals(self, limit: int = 3):
+        if self.goal_execution is None:
+            self.initialize_learning()
+        return self.goal_execution.ready_goals(limit)
+
+    async def execute_goal(self, goal_id: str):
+        if self.goal_execution is None:
+            self.initialize_learning()
+        return await self.goal_execution.execute(goal_id)
+
+    async def execute_next_goal(self):
+        if self.goal_execution is None:
+            self.initialize_learning()
+        return await self.goal_execution.execute_next()
+
+    def promote_curiosity_goal(self):
+        if self.goal_execution is None:
+            self.initialize_learning()
+        return self.goal_execution.promote_curiosity()
 
     def create_goal(self, title: str, description: str, priority: str = "NORMAL", parent_id: str | None = None, goal_type: str = "user"):
         if self.goals is None:

@@ -49,9 +49,10 @@ with sqlite3.connect(_db.db_path) as conn:
 _checkpoints = CheckpointManager(_db)
 _skills = SkillRegistry(_db)
 
-PAGES = ("dashboard", "chat", "agent", "tasks", "scheduler", "workers", "memory",
-         "skills", "tools", "approvals", "checkpoints", "logs", "system",
-         "diagnostics", "self", "settings")
+PAGES = ("dashboard", "chat", "agent", "tasks", "plans", "live", "memory",
+         "skills", "tools", "workers", "scheduler", "browser", "research", "goals",
+         "approvals", "security", "checkpoints", "audit", "logs", "system",
+         "model", "diagnostics", "self", "settings")
 
 
 def _resource_snapshot() -> dict:
@@ -361,6 +362,26 @@ async def self_research_summaries(mission_id: str):
         manager.research,
     )
     return {"summaries": engine.list_summaries(mission_id)}
+
+@app.get("/api/self/goals/ready")
+async def ready_self_goals(limit: int = 3):
+    runtime = await get_runtime()
+    return {"goals": runtime.orchestrator.self_manager.ready_goals(limit)}
+
+@app.post("/api/self/goals/{goal_id}/execute")
+async def execute_self_goal(goal_id: str):
+    runtime = await get_runtime()
+    return await runtime.orchestrator.self_manager.execute_goal(goal_id)
+
+@app.post("/api/self/goals/execute-next")
+async def execute_next_self_goal():
+    runtime = await get_runtime()
+    return await runtime.orchestrator.self_manager.execute_next_goal()
+
+@app.post("/api/self/curiosity/promote")
+async def promote_self_curiosity():
+    runtime = await get_runtime()
+    return runtime.orchestrator.self_manager.promote_curiosity_goal()
 
 @app.get("/api/self/goals/{goal_id}/dependencies")
 async def self_goal_dependencies(goal_id: str):
