@@ -1,0 +1,49 @@
+# LiteRT Agent configuration example
+[agent]
+name = "litert-agent"
+autonomy_level = 3
+home_dir = "~/.litert-agent"
+workspace_dir = "~/.litert-agent/workspace"
+safe_mode = false
+offline_mode = false
+profile = "normal"
+
+[model]
+cli_path = "litert-lm"
+model_path = ""
+timeout_seconds = 120
+temperature = 0.7
+max_tokens = 4096
+
+[loop]
+max_iterations = 50
+max_retries = 3
+max_tool_calls = 100
+
+[memory]
+enabled = true
+working_max_items = 50
+
+[scheduler]
+enabled = true
+heartbeat_seconds = 30
+workers = 1
+
+[web]
+host = "127.0.0.1"
+port = 8765
+
+[self]
+enabled = true
+diagnostics_on_start = true
+auto_maintenance = false
+max_concurrent_workers = 4
+snapshot_enabled = true
+snapshot_interval_seconds = 900
+research_enabled = true
+research_max_sources_per_mission = 5
+research_max_content_chars = 200000
+knowledge_stale_after_days = 30
+curiosity_enabled = true
+autonomous_goal_generation = false
+skill_auto_registration = false
