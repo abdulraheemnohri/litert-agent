@@ -5,14 +5,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 MessageType = Literal[
-    "thought",
-    "plan",
-    "tool_call",
-    "observation_request",
-    "approval_required",
-    "reflection",
-    "final",
-    "error",
+    "thought", "plan", "tool_call", "observation_request",
+    "approval_required", "reflection", "final", "error",
 ]
 
 class ProtocolMessage(BaseModel):
@@ -23,3 +17,9 @@ class ProtocolMessage(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
     plan_steps: list[str] = Field(default_factory=list)
     reason: str | None = None
+    intent: str | None = None
+    goal: str | None = None
+    risk: str | None = None
+    requires_approval: bool = False
+    verification: list[str] = Field(default_factory=list)
+    memory_update: dict[str, Any] = Field(default_factory=dict)
