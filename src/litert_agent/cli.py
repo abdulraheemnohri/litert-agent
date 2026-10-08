@@ -574,6 +574,13 @@ def research_mission(topic: str, goal: str, url: list[str] = typer.Option(None, 
     manager = AgentRuntime.get().orchestrator.self_manager
     _print(manager.research_mission(topic, goal, url or []), False)
 
+@research_app.command("collect")
+def research_collect(mission_id: str, json_out: bool = typer.Option(False, "--json")):
+    """Fetch all sources attached to a research mission; never execute source content."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    data = asyncio.run(manager.collect_research(mission_id))
+    _print(data, json_out)
+
 @research_app.command("sources")
 def research_sources(json_out: bool = typer.Option(False, "--json")):
     manager = AgentRuntime.get().orchestrator.self_manager
@@ -600,6 +607,18 @@ def goal_create(title: str, description: str, priority: str = typer.Option("NORM
                 parent: str = typer.Option(None, "--parent"), goal_type: str = typer.Option("user", "--type")):
     manager = AgentRuntime.get().orchestrator.self_manager
     _print(manager.create_goal(title, description, priority, parent, goal_type), False)
+
+@goal_app.command("dependency")
+def goal_dependency(goal_id: str, depends_on: str):
+    """Add a prerequisite goal dependency."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(manager.add_goal_dependency(goal_id, depends_on), False)
+
+@goal_app.command("generate-curiosity")
+def goal_generate_curiosity(json_out: bool = typer.Option(False, "--json")):
+    """Create bounded curiosity items for stale knowledge."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print({"created": manager.generate_curiosity()}, json_out)
 
 @goal_app.command("list")
 def goal_list(status: str = typer.Option(None, "--status"), json_out: bool = typer.Option(False, "--json")):
@@ -629,7 +648,9 @@ def self_test():
     """Run self-tests over core subsystems."""
     results = {}
     db = _db()
-    results["database"] = bool(db.execute_read("SELECT name FROM sqlite_master WHERE type='table'"))
+    required = {"research_sources","research_missions","research_mission_urls","research_findings","self_goals","goal_dependencies","curiosity_queue","knowledge_expiry","self_skill_versions","self_skill_quarantine"}
+    tables = {r[0] for r in db.execute_read("SELECT name FROM sqlite_master WHERE type='table'")}
+    results["database"] = required.issubset(tables)
     results["checkpoints"] = isinstance(CheckpointManager(db).list_checkpoints(), list)
     results["skills"] = len(SkillRegistry(db).list_skills()) > 0
     results["scheduler"] = isinstance(_list_scheduler_jobs(), list)
