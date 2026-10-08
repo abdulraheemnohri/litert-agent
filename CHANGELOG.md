@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Added
+- Self-X subsystem: SQLite-backed autonomous goal manager with full state
+  machine (high-risk goals require approval), curiosity engine (score, dedupe,
+  rank, promote-to-goal), self-learning engine (experience → lesson → pattern →
+  skill proposal, no auto-activation) and an operational self-report
+- Autonomous research store: missions, source credibility scoring, claim
+  polarity, contradiction detection, cross-source synthesis, corroborated
+  knowledge records; internet content is evidence only, never instructions
+- `litert-agent-self` CLI: goal create/list/show/approve/execute-next/pause/
+  resume/cancel/complete, curiosity, learn, report, research create/add-source/
+  add-claim/synthesize/report
+- Unit tests for goals, curiosity, learning and research
+- Docs: self-x.md, research.md
 - Persisted scheduler jobs (`scheduler_jobs` SQLite table) shared by CLI and Web API
 - Real `litert-agent schedule list / add / remove / run` CLI commands
 - API: `POST /api/chat`, `GET /api/scheduler`, `POST /api/scheduler`, `POST /api/scheduler/{id}/run`,

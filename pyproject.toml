@@ -36,6 +36,7 @@ dev = [
 
 [project.scripts]
 litert-agent = "litert_agent.cli:app"
+litert-agent-self = "litert_agent.self_cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/litert_agent"]
