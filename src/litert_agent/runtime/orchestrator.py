@@ -39,10 +39,15 @@ class Orchestrator:
         self.tool_registry = ToolRegistry()
         self._register_default_tools()
 
-        self.policy = SecurityPolicy(safe_mode=self.config.agent.safe_mode)
+        self.policy = SecurityPolicy(
+            safe_mode=self.config.agent.safe_mode,
+            workspace_root=self.config.agent.workspace_dir,
+        )
         self.audit_logger = AuditLogger(self.config.agent.home_dir / "logs")
-        self.approval_manager = ApprovalManager(auto_approve=auto_approve,
-                                                 audit_logger=self.audit_logger)
+        self.approval_manager = ApprovalManager(
+            auto_approve=auto_approve,
+            audit_logger=self.audit_logger,
+        )
         self.executor = Executor(self.tool_registry, self.policy, self.approval_manager)
         self.memory = MemoryManager(self.config.agent.home_dir / "agent.db")
         self.event_bus = EventBus()
@@ -51,7 +56,7 @@ class Orchestrator:
     def _register_default_tools(self):
         for tool in (
             TerminalTool(),
-            FilesystemTool(),
+            FilesystemTool(workspace_root=self.config.agent.workspace_dir),
             PythonTool(),
             GitTool(),
             HTTPTool(),
