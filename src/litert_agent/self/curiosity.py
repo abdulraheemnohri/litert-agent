@@ -3,7 +3,8 @@
 Generates candidate future goals from observed signals such as repeated
 failures, missing knowledge and skill gaps. Curiosity items are proposals
 only — they become goals (and then require approval for high risk) when
-explicitly promoted.
+explicitly promoted. Tables use a `self_x_` prefix to avoid collisions
+with the canonical memory/sqlite.py schema.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from pathlib import Path
 DEFAULT_DB = Path.home() / ".litert-agent" / "agent.db"
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS curiosity (
+CREATE TABLE IF NOT EXISTS self_x_curiosity (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT NOT NULL,
     origin TEXT DEFAULT '',
@@ -69,7 +70,7 @@ class CuriosityEngine:
     def generate_curiosity(self, question: str, origin: str = "observation") -> CuriosityItem:
         score = self.score_curiosity(origin)
         self._conn.execute(
-            "INSERT INTO curiosity (question, origin, score, created_at) VALUES (?,?,?,?)",
+            "INSERT INTO self_x_curiosity (question, origin, score, created_at) VALUES (?,?,?,?)",
             (question, origin, score, _now()),
         )
         self._conn.commit()
@@ -82,7 +83,7 @@ class CuriosityEngine:
     def deduplicate_curiosity(self) -> int:
         """Merge identical open questions, keeping the highest score."""
         rows = self._conn.execute(
-            "SELECT id, question, score FROM curiosity WHERE status = 'NEW' ORDER BY id"
+            "SELECT id, question, score FROM self_x_curiosity WHERE status = 'NEW' ORDER BY id"
         ).fetchall()
         seen: dict[str, int] = {}
         removed = 0
@@ -92,10 +93,10 @@ class CuriosityEngine:
                 keep = seen[key]
                 if row["score"] > 0:
                     self._conn.execute(
-                        "UPDATE curiosity SET score = MAX(score, ?) WHERE id = ?",
+                        "UPDATE self_x_curiosity SET score = MAX(score, ?) WHERE id = ?",
                         (row["score"], keep),
                     )
-                self._conn.execute("DELETE FROM curiosity WHERE id = ?", (row["id"],))
+                self._conn.execute("DELETE FROM self_x_curiosity WHERE id = ?", (row["id"],))
                 removed += 1
             else:
                 seen[key] = row["id"]
@@ -104,14 +105,14 @@ class CuriosityEngine:
 
     def rank_curiosity(self) -> list[CuriosityItem]:
         rows = self._conn.execute(
-            "SELECT * FROM curiosity WHERE status = 'NEW' ORDER BY score DESC, id"
+            "SELECT * FROM self_x_curiosity WHERE status = 'NEW' ORDER BY score DESC, id"
         ).fetchall()
         return [self._row(r) for r in rows]
 
     def promote_curiosity_to_goal(self, item_id: int, goal_manager) -> str:
         """Promote a curiosity item into a real goal via the GoalManager."""
         row = self._conn.execute(
-            "SELECT * FROM curiosity WHERE id = ?", (item_id,)
+            "SELECT * FROM self_x_curiosity WHERE id = ?", (item_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"curiosity item not found: {item_id}")
@@ -122,7 +123,7 @@ class CuriosityEngine:
             risk="medium",  # generated goals always require approval
         )
         self._conn.execute(
-            "UPDATE curiosity SET status = 'PROMOTED' WHERE id = ?", (item_id,)
+            "UPDATE self_x_curiosity SET status = 'PROMOTED' WHERE id = ?", (item_id,)
         )
         self._conn.commit()
         return goal.id
@@ -130,7 +131,7 @@ class CuriosityEngine:
     def expire_curiosity(self, max_age_days: int = 30) -> int:
         cutoff = datetime.now(timezone.utc).timestamp() - max_age_days * 86400
         rows = self._conn.execute(
-            "DELETE FROM curiosity WHERE status = 'NEW' AND"
+            "DELETE FROM self_x_curiosity WHERE status = 'NEW' AND"
             " CAST(strftime('%s', created_at) AS INTEGER) < ?",
             (int(cutoff),),
         )
@@ -138,7 +139,7 @@ class CuriosityEngine:
         return rows.rowcount
 
     def list_curiosity(self) -> list[CuriosityItem]:
-        rows = self._conn.execute("SELECT * FROM curiosity ORDER BY id DESC").fetchall()
+        rows = self._conn.execute("SELECT * FROM self_x_curiosity ORDER BY id DESC").fetchall()
         return [self._row(r) for r in rows]
 
     @staticmethod

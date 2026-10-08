@@ -3,6 +3,8 @@
 Learning here means experience -> evaluation -> lesson -> memory, never
 model-weight modification. Skill proposals generated from repeated patterns
 follow the spec lifecycle and default to inactive (no auto-activation).
+Tables use a `self_x_` prefix to avoid collisions with the canonical
+memory/sqlite.py schema in the same shared database.
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ SKILL_LIFECYCLE = (
 )
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS experiences (
+CREATE TABLE IF NOT EXISTS self_x_experiences (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task TEXT NOT NULL,
     outcome TEXT NOT NULL,
@@ -29,14 +31,14 @@ CREATE TABLE IF NOT EXISTS experiences (
     confidence REAL DEFAULT 0.5,
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS lessons (
+CREATE TABLE IF NOT EXISTS self_x_lessons (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     experience_id INTEGER,
     lesson TEXT NOT NULL,
     confidence REAL DEFAULT 0.5,
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS skill_proposals (
+CREATE TABLE IF NOT EXISTS self_x_skill_proposals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     reason TEXT DEFAULT '',
@@ -95,7 +97,7 @@ class LearningEngine:
         confidence = self.calculate_confidence(success, len(errors or []))
         lesson = self.extract_lesson(task, outcome, errors_joined)
         cur = self._conn.execute(
-            "INSERT INTO experiences (task, outcome, tools, errors, lesson,"
+            "INSERT INTO self_x_experiences (task, outcome, tools, errors, lesson,"
             " confidence, created_at) VALUES (?,?,?,?,?,?,?)",
             (task, outcome, ",".join(tools or []), errors_joined, lesson,
              confidence, _now()),
@@ -107,7 +109,7 @@ class LearningEngine:
 
     def get_experience(self, experience_id: int) -> Experience:
         row = self._conn.execute(
-            "SELECT * FROM experiences WHERE id = ?", (experience_id,)
+            "SELECT * FROM self_x_experiences WHERE id = ?", (experience_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"experience not found: {experience_id}")
@@ -119,7 +121,7 @@ class LearningEngine:
 
     def list_experiences(self, limit: int = 50) -> list[Experience]:
         rows = self._conn.execute(
-            "SELECT * FROM experiences ORDER BY id DESC LIMIT ?", (limit,)
+            "SELECT id FROM self_x_experiences ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
         return [self.get_experience(r["id"]) for r in rows]
 
@@ -139,7 +141,7 @@ class LearningEngine:
 
     def store_lesson(self, experience_id: int, lesson: str, confidence: float) -> int:
         cur = self._conn.execute(
-            "INSERT INTO lessons (experience_id, lesson, confidence, created_at)"
+            "INSERT INTO self_x_lessons (experience_id, lesson, confidence, created_at)"
             " VALUES (?,?,?,?)",
             (experience_id, lesson, confidence, _now()),
         )
@@ -148,7 +150,7 @@ class LearningEngine:
 
     def list_lessons(self, min_confidence: float = 0.0) -> list[dict]:
         rows = self._conn.execute(
-            "SELECT * FROM lessons WHERE confidence >= ? ORDER BY id DESC",
+            "SELECT * FROM self_x_lessons WHERE confidence >= ? ORDER BY id DESC",
             (min_confidence,),
         ).fetchall()
         return [dict(r) for r in rows]
@@ -157,7 +159,7 @@ class LearningEngine:
     def derive_pattern(self) -> dict | None:
         """Detect a repeated (tool, first-error) pattern across failures."""
         rows = self._conn.execute(
-            "SELECT tools, errors FROM experiences WHERE outcome NOT IN"
+            "SELECT tools, errors FROM self_x_experiences WHERE outcome NOT IN"
             " ('success','completed','pass')"
         ).fetchall()
         counts: dict[tuple[str, str], int] = {}
@@ -181,13 +183,13 @@ class LearningEngine:
             return None
         name = f"{pattern['tool']}-diagnostic"
         existing = self._conn.execute(
-            "SELECT id FROM skill_proposals WHERE name = ?", (name,)
+            "SELECT id FROM self_x_skill_proposals WHERE name = ?", (name,)
         ).fetchone()
         if existing:
             return None
         reason = f"Repeated failure ({pattern['count']}x) with tool '{pattern['tool']}': {pattern['error']}"
         self._conn.execute(
-            "INSERT INTO skill_proposals (name, reason, evidence, status, created_at)"
+            "INSERT INTO self_x_skill_proposals (name, reason, evidence, status, created_at)"
             " VALUES (?,?,?,?,?)",
             (name, reason, pattern["error"], "PROPOSED", _now()),
         )
@@ -196,7 +198,7 @@ class LearningEngine:
 
     def list_skill_proposals(self) -> list[dict]:
         rows = self._conn.execute(
-            "SELECT * FROM skill_proposals ORDER BY id DESC"
+            "SELECT * FROM self_x_skill_proposals ORDER BY id DESC"
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -204,12 +206,12 @@ class LearningEngine:
         """Human decision on a skill proposal (spec section 17)."""
         status = "ACTIVE" if approve else "REJECTED"
         row = self._conn.execute(
-            "SELECT id FROM skill_proposals WHERE id = ?", (proposal_id,)
+            "SELECT id FROM self_x_skill_proposals WHERE id = ?", (proposal_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"proposal not found: {proposal_id}")
         self._conn.execute(
-            "UPDATE skill_proposals SET status = ? WHERE id = ?", (status, proposal_id)
+            "UPDATE self_x_skill_proposals SET status = ? WHERE id = ?", (status, proposal_id)
         )
         self._conn.commit()
         return {"id": proposal_id, "status": status}

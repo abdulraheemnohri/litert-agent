@@ -1,6 +1,8 @@
 """Autonomous goal manager (A-to-Z spec section 12).
 
 Goals persist in the shared SQLite database and drive the autonomous loop.
+Tables use a `self_x_` prefix so they never collide with the canonical
+tables created by memory/sqlite.py in the same shared database.
 The manager never bypasses policy: high-risk goals are created in the
 WAITING_APPROVAL state and stay there until an approval is recorded.
 """
@@ -17,7 +19,7 @@ from typing import Any
 DEFAULT_DB = Path.home() / ".litert-agent" / "agent.db"
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS goals (
+CREATE TABLE IF NOT EXISTS self_x_goals (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
@@ -33,7 +35,7 @@ CREATE TABLE IF NOT EXISTS goals (
     updated_at TEXT NOT NULL,
     completed_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
+CREATE INDEX IF NOT EXISTS idx_self_x_goals_status ON self_x_goals(status);
 """
 
 
@@ -117,7 +119,7 @@ class GoalManager:
         status = GoalState.WAITING_APPROVAL.value if risk in {"medium", "high", "critical"} else GoalState.PENDING.value
         now = _now()
         self._conn.execute(
-            "INSERT INTO goals (id, title, description, priority, source,"
+            "INSERT INTO self_x_goals (id, title, description, priority, source,"
             " dependencies, risk, status, parent_goal, verification_rules,"
             " created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (goal_id, title, description, priority, source,
@@ -128,7 +130,7 @@ class GoalManager:
         return self.get_goal(goal_id)
 
     def get_goal(self, goal_id: str) -> Goal:
-        row = self._conn.execute("SELECT * FROM goals WHERE id = ?", (goal_id,)).fetchone()
+        row = self._conn.execute("SELECT * FROM self_x_goals WHERE id = ?", (goal_id,)).fetchone()
         if row is None:
             raise KeyError(f"goal not found: {goal_id}")
         return self._row_to_goal(row)
@@ -136,10 +138,10 @@ class GoalManager:
     def list_goals(self, status: str | None = None) -> list[Goal]:
         if status:
             rows = self._conn.execute(
-                "SELECT * FROM goals WHERE status = ? ORDER BY created_at", (status,)
+                "SELECT * FROM self_x_goals WHERE status = ? ORDER BY created_at", (status,)
             ).fetchall()
         else:
-            rows = self._conn.execute("SELECT * FROM goals ORDER BY created_at").fetchall()
+            rows = self._conn.execute("SELECT * FROM self_x_goals ORDER BY created_at").fetchall()
         return [self._row_to_goal(r) for r in rows]
 
     def _update(self, goal_id: str, **fields: Any) -> Goal:
@@ -148,7 +150,7 @@ class GoalManager:
         fields["updated_at"] = _now()
         sets = ", ".join(f"{k} = ?" for k in fields)
         values = list(fields.values()) + [goal_id]
-        self._conn.execute(f"UPDATE goals SET {sets} WHERE id = ?", values)
+        self._conn.execute(f"UPDATE self_x_goals SET {sets} WHERE id = ?", values)
         self._conn.commit()
         return self.get_goal(goal_id)
 

@@ -4,8 +4,10 @@ Pipeline (spec section 15):
 question -> sources -> claims -> credibility -> contradiction check ->
 synthesis -> knowledge record.
 
+Tables use a `self_x_` prefix so they never collide with the canonical
+research tables created by memory/sqlite.py in the shared database.
 Internet content is stored as data only; it is never executed or treated
-as instructions.
+as instructions (prompt-injection defense, spec section 92).
 """
 from __future__ import annotations
 
@@ -26,28 +28,28 @@ KNOWLEDGE_STATES = (
 _NEGATIVE = re.compile(r"\b(not|never|cannot|no)\b", re.IGNORECASE)
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS research (
+CREATE TABLE IF NOT EXISTS self_x_research (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT NOT NULL,
     status TEXT DEFAULT 'OPEN',
     synthesis TEXT DEFAULT '',
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS research_sources (
+CREATE TABLE IF NOT EXISTS self_x_research_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     research_id INTEGER NOT NULL,
     url TEXT NOT NULL,
     credibility REAL DEFAULT 0.5,
     fetched_at TEXT
 );
-CREATE TABLE IF NOT EXISTS research_claims (
+CREATE TABLE IF NOT EXISTS self_x_research_claims (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     research_id INTEGER NOT NULL,
     source_id INTEGER NOT NULL,
     claim TEXT NOT NULL,
     polarity INTEGER DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS knowledge (
+CREATE TABLE IF NOT EXISTS self_x_knowledge (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     claim TEXT NOT NULL,
     source TEXT DEFAULT '',
@@ -107,7 +109,7 @@ class ResearchStore:
 
     def create_research(self, question: str) -> ResearchMission:
         cur = self._conn.execute(
-            "INSERT INTO research (question, created_at) VALUES (?,?)",
+            "INSERT INTO self_x_research (question, created_at) VALUES (?,?)",
             (question, _now()),
         )
         self._conn.commit()
@@ -115,20 +117,20 @@ class ResearchStore:
 
     def get_mission(self, mission_id: int) -> ResearchMission:
         row = self._conn.execute(
-            "SELECT * FROM research WHERE id = ?", (mission_id,)
+            "SELECT * FROM self_x_research WHERE id = ?", (mission_id,)
         ).fetchone()
         if row is None:
             raise KeyError(f"research mission not found: {mission_id}")
         sources = [
             Source(r["id"], r["url"], r["credibility"])
             for r in self._conn.execute(
-                "SELECT * FROM research_sources WHERE research_id = ?", (mission_id,)
+                "SELECT * FROM self_x_research_sources WHERE research_id = ?", (mission_id,)
             )
         ]
         claims = [
             Claim(r["id"], r["source_id"], r["claim"], r["polarity"])
             for r in self._conn.execute(
-                "SELECT * FROM research_claims WHERE research_id = ?", (mission_id,)
+                "SELECT * FROM self_x_research_claims WHERE research_id = ?", (mission_id,)
             )
         ]
         return ResearchMission(row["id"], row["question"], row["status"],
@@ -141,7 +143,7 @@ class ResearchStore:
         """
         credibility = self.score_source(url)
         cur = self._conn.execute(
-            "INSERT INTO research_sources (research_id, url, credibility, fetched_at)"
+            "INSERT INTO self_x_research_sources (research_id, url, credibility, fetched_at)"
             " VALUES (?,?,?,?)",
             (mission_id, url, credibility, _now()),
         )
@@ -160,7 +162,7 @@ class ResearchStore:
         """Store an extracted claim. Negative claims get polarity -1."""
         polarity = -1 if _NEGATIVE.search(claim) else 1
         cur = self._conn.execute(
-            "INSERT INTO research_claims (research_id, source_id, claim, polarity)"
+            "INSERT INTO self_x_research_claims (research_id, source_id, claim, polarity)"
             " VALUES (?,?,?,?)",
             (mission_id, source_id, claim, polarity),
         )
@@ -214,7 +216,7 @@ class ResearchStore:
                        provenance: str = "", domain: str = "",
                        verification_state: str = "UNVERIFIED") -> int:
         cur = self._conn.execute(
-            "INSERT INTO knowledge (claim, source, confidence, provenance, domain,"
+            "INSERT INTO self_x_knowledge (claim, source, confidence, provenance, domain,"
             " verification_state, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
             (claim, source, confidence, provenance, domain,
              verification_state, _now(), _now()),
@@ -225,20 +227,20 @@ class ResearchStore:
     def list_knowledge(self, verification_state: str | None = None) -> list[dict]:
         if verification_state:
             rows = self._conn.execute(
-                "SELECT * FROM knowledge WHERE verification_state = ? ORDER BY id DESC",
+                "SELECT * FROM self_x_knowledge WHERE verification_state = ? ORDER BY id DESC",
                 (verification_state,),
             )
         else:
-            rows = self._conn.execute("SELECT * FROM knowledge ORDER BY id DESC")
+            rows = self._conn.execute("SELECT * FROM self_x_knowledge ORDER BY id DESC")
         return [dict(r) for r in rows]
 
     def list_missions(self) -> list[ResearchMission]:
-        rows = self._conn.execute("SELECT id FROM research ORDER BY id DESC").fetchall()
+        rows = self._conn.execute("SELECT id FROM self_x_research ORDER BY id DESC").fetchall()
         return [self.get_mission(r["id"]) for r in rows]
 
     def _set_status(self, mission_id: int, status: str, synthesis: str) -> None:
         self._conn.execute(
-            "UPDATE research SET status = ?, synthesis = ? WHERE id = ?",
+            "UPDATE self_x_research SET status = ?, synthesis = ? WHERE id = ?",
             (status, synthesis, mission_id),
         )
         self._conn.commit()
