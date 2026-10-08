@@ -103,7 +103,10 @@ class ResearchEngine:
             (finding_id, mission_id, source.id, topic[:500], claim, evidence,
              normalized, max(0.0, min(1.0, confidence)), time.time()),
         )
-        self.db.execute_write("UPDATE research_missions SET source_count = source_count + 1 WHERE id = ?", (mission_id,))
+        self.db.execute_write(
+            "UPDATE research_missions SET source_count = source_count + 1, updated_at=? WHERE id = ?",
+            (time.time(), mission_id),
+        )
         if self.memory and status == "NEW":
             await self.memory.lessons.add_lesson(
                 f"research:{topic}:{source.source_hash[:16]}",
@@ -159,22 +162,65 @@ class ResearchEngine:
         for url in urls:
             if not self.validate_url(url):
                 raise ValueError(f"Invalid research URL: {url}")
+        now = time.time()
         self.db.execute_write(
-            "INSERT INTO research_missions (id,topic,goal,status,source_count,created_at) "
-            "VALUES (?,?,?,?,?,?)", (mid, topic[:500], goal[:4000], "PENDING", 0, time.time())
+            "INSERT INTO research_missions (id,topic,goal,status,source_count,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?)", (mid, topic[:500], goal[:4000], "PENDING", 0, now, now)
         )
+        for url in urls:
+            self.db.execute_write(
+                "INSERT OR IGNORE INTO research_mission_urls (mission_id,url,status) VALUES (?,?,?)",
+                (mid, url, "PENDING"),
+            )
         return {"id": mid, "topic": topic, "goal": goal, "status": "PENDING", "urls": urls}
 
     def finish_mission(self, mission_id: str, status: str = "COMPLETED") -> bool:
         allowed = {"PENDING","RUNNING","COMPLETED","FAILED","PAUSED","CANCELLED"}
         if status not in allowed:
             raise ValueError("invalid mission status")
-        self.db.execute_write("UPDATE research_missions SET status=? WHERE id=?", (status, mission_id))
+        self.db.execute_write(
+            "UPDATE research_missions SET status=?, updated_at=? WHERE id=?",
+            (status, time.time(), mission_id),
+        )
         return True
+
+    def mission_urls(self, mission_id: str) -> list[dict]:
+        rows = self.db.execute_read(
+            "SELECT url,status,source_id,error FROM research_mission_urls "
+            "WHERE mission_id=? ORDER BY url", (mission_id,)
+        )
+        return [{"url": r[0], "status": r[1], "source_id": r[2], "error": r[3]} for r in rows]
+
+    async def collect_mission_sources(self, mission_id: str) -> dict:
+        if not self.db.execute_read("SELECT id FROM research_missions WHERE id=?", (mission_id,)):
+            raise KeyError(mission_id)
+        self.finish_mission(mission_id, "RUNNING")
+        collected, failed = 0, 0
+        rows = self.db.execute_read(
+            "SELECT url FROM research_mission_urls WHERE mission_id=? AND status IN ('PENDING','FAILED')",
+            (mission_id,),
+        )
+        for (url,) in rows:
+            try:
+                source = await self.fetch_source(url)
+                self.db.execute_write(
+                    "UPDATE research_mission_urls SET status='FETCHED',source_id=?,error=NULL WHERE mission_id=? AND url=?",
+                    (source.id, mission_id, url),
+                )
+                collected += 1
+            except Exception as exc:
+                self.db.execute_write(
+                    "UPDATE research_mission_urls SET status='FAILED',error=? WHERE mission_id=? AND url=?",
+                    (str(exc)[:2000], mission_id, url),
+                )
+                failed += 1
+        self.finish_mission(mission_id, "COMPLETED" if failed == 0 else "PAUSED")
+        return {"mission_id": mission_id, "collected": collected, "failed": failed, "urls": self.mission_urls(mission_id)}
 
     def list_missions(self, limit: int = 50) -> list[dict]:
         rows = self.db.execute_read(
-            "SELECT id,topic,goal,status,source_count,created_at FROM research_missions "
+            "SELECT id,topic,goal,status,source_count,created_at,updated_at FROM research_missions "
             "ORDER BY created_at DESC LIMIT ?", (limit,))
         return [{"id":r[0],"topic":r[1],"goal":r[2],"status":r[3],
-                 "source_count":r[4],"created_at":r[5]} for r in rows]
+                 "source_count":r[4],"created_at":r[5],"updated_at":r[6],
+                 "urls": self.mission_urls(r[0])} for r in rows]

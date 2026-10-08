@@ -45,6 +45,31 @@ class GoalManager:
         return [{"id":r[0],"title":r[1],"description":r[2],"priority":r[3],"status":r[4],
                  "parent_id":r[5],"goal_type":r[6],"progress":r[7],"created_at":r[8],"updated_at":r[9]} for r in rows]
 
+    def add_dependency(self, goal_id: str, depends_on_goal_id: str):
+        if goal_id == depends_on_goal_id:
+            raise ValueError("goal cannot depend on itself")
+        if not self.get(goal_id) or not self.get(depends_on_goal_id):
+            raise KeyError("goal dependency target not found")
+        self.db.execute_write(
+            "INSERT OR IGNORE INTO goal_dependencies (goal_id,depends_on_goal_id) VALUES (?,?)",
+            (goal_id, depends_on_goal_id),
+        )
+        return self.dependencies(goal_id)
+
+    def dependencies(self, goal_id: str) -> list[dict]:
+        rows = self.db.execute_read(
+            "SELECT g.id,g.title,g.status,g.progress FROM goal_dependencies d "
+            "JOIN self_goals g ON g.id=d.depends_on_goal_id WHERE d.goal_id=?",
+            (goal_id,),
+        )
+        return [{"id":r[0],"title":r[1],"status":r[2],"progress":r[3]} for r in rows]
+
+    def is_ready(self, goal_id: str) -> bool:
+        goal = self.get(goal_id)
+        if not goal:
+            raise KeyError(goal_id)
+        return all(d["status"] == "COMPLETED" for d in self.dependencies(goal_id))
+
     def update(self, goal_id: str, status: str | None = None, progress: float | None = None):
         if status and status not in self.STATUSES: raise ValueError("invalid status")
         if progress is not None: progress=max(0.0,min(1.0,float(progress)))
@@ -80,7 +105,7 @@ class GoalManager:
         )
         if not rows: return None
         r=rows[0]
-        self.db.execute_write("UPDATE curiosity_queue SET status='CLAIMED' WHERE id=?",(r[0],))
+        self.db.execute_write("UPDATE curiosity_queue SET status='CLAIMED',claimed_at=? WHERE id=?",(time.time(),r[0]))
         return {"id":r[0],"topic":r[1],"reason":r[2],"priority":r[3],"status":"CLAIMED","created_at":r[5]}
 
     def expire_stale(self, max_age_seconds: float = 2592000) -> int:
@@ -89,3 +114,28 @@ class GoalManager:
         for r in rows:
             self.db.execute_write("UPDATE knowledge_expiry SET status='STALE' WHERE id=?",(r[0],))
         return len(rows)
+
+
+    def complete_curiosity(self, curiosity_id: str) -> bool:
+        self.db.execute_write(
+            "UPDATE curiosity_queue SET status='COMPLETED',completed_at=? WHERE id=?",
+            (time.time(), curiosity_id),
+        )
+        return True
+
+    def generate_curiosity_from_stale(self, max_age_seconds: float = 2592000, limit: int = 10) -> int:
+        stale = self.expire_stale(max_age_seconds)
+        rows = self.db.execute_read(
+            "SELECT memory_key FROM knowledge_expiry WHERE status='STALE' "
+            "ORDER BY updated_at ASC LIMIT ?", (limit,)
+        )
+        created = 0
+        for (topic,) in rows:
+            exists = self.db.execute_read(
+                "SELECT id FROM curiosity_queue WHERE topic=? AND status IN ('PENDING','CLAIMED') LIMIT 1",
+                (topic,),
+            )
+            if not exists:
+                self.enqueue_curiosity(topic, "Knowledge is stale and needs verification", "LOW")
+                created += 1
+        return created
