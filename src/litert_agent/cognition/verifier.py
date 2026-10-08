@@ -10,8 +10,6 @@ from litert_agent.tools.base import ToolResult
 
 @dataclass(frozen=True)
 class VerificationContract:
-    """A small, deterministic contract derived from model metadata."""
-
     checks: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -25,7 +23,7 @@ class VerificationContract:
 
 
 class Verifier:
-    """Verifies tool results against explicit, bounded expectations."""
+    """Verifies execution results against explicit, bounded expectations."""
 
     def verify_action(self, tool_result: ToolResult) -> bool:
         return bool(tool_result.success)
@@ -45,10 +43,9 @@ class Verifier:
     ) -> tuple[bool, list[str]]:
         if not tool_result.success:
             return False, [tool_result.error or "tool execution failed"]
-        failures: list[str] = []
         output = tool_result.output or ""
+        failures: list[str] = []
         for check in contract.checks:
-            # Deterministic checks only; model text never becomes executable code.
             if check.lower().startswith("contains:"):
                 expected = check.split(":", 1)[1].strip()
                 if expected and expected not in output:
@@ -65,6 +62,5 @@ class Verifier:
                 except re.error:
                     failures.append("invalid regex verification request")
             else:
-                # Unknown verification requests are evidence gaps, not commands.
                 failures.append(f"unsupported verification check: {check[:200]}")
         return not failures, failures
