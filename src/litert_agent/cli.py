@@ -623,6 +623,30 @@ def goal_create(title: str, description: str, priority: str = typer.Option("NORM
     manager = AgentRuntime.get().orchestrator.self_manager
     _print(manager.create_goal(title, description, priority, parent, goal_type), False)
 
+@goal_app.command("ready")
+def goal_ready(limit: int = typer.Option(3, "--limit")):
+    """List pending goals whose dependencies are complete."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(manager.ready_goals(limit), False)
+
+@goal_app.command("execute")
+def goal_execute(goal_id: str):
+    """Execute one ready Self-X goal through the normal policy-controlled loop."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(asyncio.run(manager.execute_goal(goal_id)), False)
+
+@goal_app.command("execute-next")
+def goal_execute_next():
+    """Execute the highest-priority ready Self-X goal."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(asyncio.run(manager.execute_next_goal()), False)
+
+@goal_app.command("promote-curiosity")
+def goal_promote_curiosity():
+    """Promote one curiosity item into a persistent goal."""
+    manager = AgentRuntime.get().orchestrator.self_manager
+    _print(manager.promote_curiosity_goal(), False)
+
 @goal_app.command("dependency")
 def goal_dependency(goal_id: str, depends_on: str):
     """Add a prerequisite goal dependency."""
