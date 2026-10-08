@@ -95,6 +95,111 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS research_sources (
+    id TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    title TEXT,
+    trust TEXT NOT NULL,
+    credibility REAL NOT NULL DEFAULT 0.5,
+    fetched_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_missions (
+    id TEXT PRIMARY KEY,
+    topic TEXT NOT NULL,
+    goal TEXT NOT NULL,
+    status TEXT NOT NULL,
+    source_count INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL,
+    updated_at REAL
+);
+
+CREATE TABLE IF NOT EXISTS research_mission_urls (
+    mission_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    source_id TEXT,
+    error TEXT,
+    PRIMARY KEY (mission_id, url)
+);
+
+CREATE TABLE IF NOT EXISTS research_findings (
+    id TEXT PRIMARY KEY,
+    mission_id TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    claim TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    normalized_claim TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.5,
+    created_at REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_research_findings_normalized
+    ON research_findings(normalized_claim);
+
+CREATE INDEX IF NOT EXISTS idx_research_findings_topic
+    ON research_findings(topic);
+
+CREATE TABLE IF NOT EXISTS self_goals (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    status TEXT NOT NULL,
+    parent_id TEXT,
+    goal_type TEXT NOT NULL,
+    progress REAL NOT NULL DEFAULT 0.0,
+    created_at REAL NOT NULL,
+    updated_at REAL
+);
+
+CREATE TABLE IF NOT EXISTS goal_dependencies (
+    goal_id TEXT NOT NULL,
+    depends_on_goal_id TEXT NOT NULL,
+    PRIMARY KEY (goal_id, depends_on_goal_id)
+);
+
+CREATE TABLE IF NOT EXISTS curiosity_queue (
+    id TEXT PRIMARY KEY,
+    topic TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    claimed_at REAL,
+    completed_at REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_curiosity_pending
+    ON curiosity_queue(status, priority, created_at);
+
+CREATE TABLE IF NOT EXISTS knowledge_expiry (
+    id TEXT PRIMARY KEY,
+    memory_type TEXT NOT NULL,
+    memory_key TEXT NOT NULL,
+    last_verified REAL NOT NULL,
+    expires_after_seconds REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'FRESH',
+    updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS self_skill_versions (
+    id TEXT PRIMARY KEY,
+    skill_name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    skill_json TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS self_skill_quarantine (
+    skill_name TEXT PRIMARY KEY,
+    reason TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS research (
     id TEXT PRIMARY KEY,
     topic TEXT,
