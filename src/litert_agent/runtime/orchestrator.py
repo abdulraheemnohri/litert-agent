@@ -56,7 +56,7 @@ class Orchestrator:
     def _register_default_tools(self):
         for tool in (
             TerminalTool(),
-            FilesystemTool(),
+            FilesystemTool(workspace_root=self.config.agent.workspace_dir),
             PythonTool(),
             GitTool(),
             HTTPTool(),
