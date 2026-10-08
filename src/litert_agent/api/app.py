@@ -49,9 +49,10 @@ with sqlite3.connect(_db.db_path) as conn:
 _checkpoints = CheckpointManager(_db)
 _skills = SkillRegistry(_db)
 
-PAGES = ("dashboard", "chat", "agent", "tasks", "scheduler", "workers", "memory",
-         "skills", "tools", "approvals", "checkpoints", "logs", "system",
-         "diagnostics", "self", "settings")
+PAGES = ("dashboard", "chat", "agent", "tasks", "plans", "live", "memory",
+         "skills", "tools", "workers", "scheduler", "browser", "research", "goals",
+         "approvals", "security", "checkpoints", "audit", "logs", "system",
+         "model", "diagnostics", "self", "settings")
 
 
 def _resource_snapshot() -> dict:
