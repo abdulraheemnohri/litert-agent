@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- Security test suite (spec test matrix): prompt-injection defense (internet
+  content stored as data only, never executed), secret-leakage (sanitizer
+  redaction before lessons/knowledge storage) and approval-bypass attempts
+  (high-risk goals need explicit approval; deny/allow-once grant no session rights)
 - Self-X subsystem: SQLite-backed autonomous goal manager with full state
   machine (high-risk goals require approval), curiosity engine (score, dedupe,
   rank, promote-to-goal), self-learning engine (experience → lesson → pattern →
@@ -36,6 +40,8 @@
 - Docs: autonomy, memory, tools, scheduler and development guides
 
 ### Fixed
+- Self-X tables namespaced with a `self_x_` prefix to prevent schema
+  collisions with the canonical `memory/sqlite.py` tables in the shared database
 - Broken `th,td` CSS rule (newline inside `solid`) in the Web UI stylesheet
 - Scheduler worker: re-queuing released jobs no longer leaves an un-awaited coroutine
 - Committed `__pycache__` bytecode artifacts removed from the repository
