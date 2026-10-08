@@ -593,6 +593,21 @@ def research_findings(topic: str = typer.Option("", "--topic"), json_out: bool =
     manager.initialize_learning()
     _print({"findings": manager.research.list_findings(topic)}, json_out)
 
+@research_app.command("synthesize")
+def research_synthesize(mission_id: str, max_sources: int = typer.Option(5, "--max-sources"), json_out: bool = typer.Option(False, "--json")):
+    """Synthesize fetched research evidence using LiteRT-LM only."""
+    from litert_agent.self.research_synthesis import ResearchSynthesizer
+    runtime = AgentRuntime.get()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    engine = ResearchSynthesizer(
+        manager.research.db,
+        runtime.orchestrator.model_provider,
+        manager.research,
+    )
+    data = asyncio.run(engine.synthesize(mission_id, max_sources))
+    _print(data, json_out)
+
 @research_app.command("compare")
 def research_compare(topic: str = typer.Option("", "--topic"), json_out: bool = typer.Option(False, "--json")):
     manager = AgentRuntime.get().orchestrator.self_manager
