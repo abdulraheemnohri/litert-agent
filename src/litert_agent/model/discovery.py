@@ -16,9 +16,9 @@ class LiteRTCLIDiscovery:
             help_text = (stdout + stderr).decode("utf-8", errors="replace")
             prompt_flag = None
             model_flag = None
-            if re.search(r"(?m)^\\s*(-p|--prompt)(?:[=\\s]|,)", help_text):
+            if re.search(r"(?m)^\s*(-p|--prompt)(?:[=\s]|,)", help_text):
                 prompt_flag = "--prompt" if "--prompt" in help_text else "-p"
-            if re.search(r"(?m)^\\s*(-m|--model)(?:[=\\s]|,)", help_text):
+            if re.search(r"(?m)^\s*(-m|--model)(?:[=\s]|,)", help_text):
                 model_flag = "--model" if "--model" in help_text else "-m"
             return {"available": proc.returncode == 0 or bool(help_text), "help_text": help_text,
                     "supports_prompt": prompt_flag is not None, "supports_model": model_flag is not None,
