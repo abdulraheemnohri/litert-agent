@@ -335,6 +335,33 @@ async def collect_self_research(mission_id: str):
     runtime = await get_runtime()
     return await runtime.orchestrator.self_manager.collect_research(mission_id)
 
+@app.post("/api/self/research/{mission_id}/synthesize")
+async def synthesize_self_research(mission_id: str, max_sources: int = 5):
+    """Synthesize fetched research evidence using LiteRT-LM only."""
+    from litert_agent.self.research_synthesis import ResearchSynthesizer
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    engine = ResearchSynthesizer(
+        manager.research.db,
+        runtime.orchestrator.model_provider,
+        manager.research,
+    )
+    return await engine.synthesize(mission_id, max_sources)
+
+@app.get("/api/self/research/{mission_id}/summaries")
+async def self_research_summaries(mission_id: str):
+    from litert_agent.self.research_synthesis import ResearchSynthesizer
+    runtime = await get_runtime()
+    manager = runtime.orchestrator.self_manager
+    manager.initialize_learning()
+    engine = ResearchSynthesizer(
+        manager.research.db,
+        runtime.orchestrator.model_provider,
+        manager.research,
+    )
+    return {"summaries": engine.list_summaries(mission_id)}
+
 @app.get("/api/self/goals/{goal_id}/dependencies")
 async def self_goal_dependencies(goal_id: str):
     runtime = await get_runtime()
