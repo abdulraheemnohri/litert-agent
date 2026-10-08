@@ -79,8 +79,8 @@ class ResearchEngine:
         rec = SourceRecord(sid, url, digest, title, "UNTRUSTED", self.credibility(url), time.time())
         self.db.execute_write(
             "INSERT OR IGNORE INTO research_sources "
-            "(id,url,source_hash,title,trust,credibility,fetched_at) VALUES (?,?,?,?,?,?,?)",
-            (rec.id, rec.url, rec.source_hash, rec.title, rec.trust, rec.credibility, rec.fetched_at),
+            "(id,url,source_hash,title,trust,credibility,fetched_at,content) VALUES (?,?,?,?,?,?,?,?)",
+            (rec.id, rec.url, rec.source_hash, rec.title, rec.trust, rec.credibility, rec.fetched_at, content),
         )
         return rec
 
