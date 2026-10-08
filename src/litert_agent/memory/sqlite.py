@@ -102,7 +102,8 @@ CREATE TABLE IF NOT EXISTS research_sources (
     title TEXT,
     trust TEXT NOT NULL,
     credibility REAL NOT NULL DEFAULT 0.5,
-    fetched_at REAL NOT NULL
+    fetched_at REAL NOT NULL,
+    content TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS research_missions (
@@ -136,11 +137,24 @@ CREATE TABLE IF NOT EXISTS research_findings (
     created_at REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS research_summaries (
+    id TEXT PRIMARY KEY,
+    mission_id TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    claims_json TEXT NOT NULL,
+    source_ids_json TEXT NOT NULL,
+    model TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_research_findings_normalized
     ON research_findings(normalized_claim);
 
 CREATE INDEX IF NOT EXISTS idx_research_findings_topic
     ON research_findings(topic);
+
+CREATE INDEX IF NOT EXISTS idx_research_summaries_mission
+    ON research_summaries(mission_id, created_at);
 
 CREATE TABLE IF NOT EXISTS self_goals (
     id TEXT PRIMARY KEY,
@@ -216,6 +230,9 @@ class DatabaseManager:
     async def init_db(self):
         with sqlite3.connect(self.db_path) as db:
             db.executescript(SCHEMA)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(research_sources)")}
+            if "content" not in columns:
+                db.execute("ALTER TABLE research_sources ADD COLUMN content TEXT NOT NULL DEFAULT ''")
             db.commit()
 
     def execute_write(self, query: str, params: tuple = ()):
