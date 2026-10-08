@@ -18,8 +18,7 @@ class ResearchSynthesizer:
     @staticmethod
     def parse_json(text: str) -> dict:
         text = text.strip()
-        text = re.sub(r"^json\s*", "", text, flags=re.I)
-        try:
+        text = text.replace("```json", "").replace("```", "").strip()\n        try:
             value = json.loads(text)
         except json.JSONDecodeError:
             match = re.search(r"\{.*\}", text, re.S)
