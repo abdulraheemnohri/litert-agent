@@ -145,7 +145,7 @@ class SelfManager:
         if self.orchestrator:
             registry = SkillRegistry(self.orchestrator.memory.db_manager)
             self.learning = LearningEngine(self.orchestrator.memory, registry, self.evolution)
-            self.self_skills = SelfSkillManager(registry, SkillValidator, self.evolution)
+            self.self_skills = SelfSkillManager(registry, SkillValidator, self.evolution, self.orchestrator.memory.db_manager)
             self.web_learning = WebLearningEngine(self.orchestrator.tool_registry.get("http"), self.orchestrator.memory)
             self.research = ResearchEngine(self.orchestrator.memory.db_manager, self.orchestrator.tool_registry.get("http"), self.orchestrator.memory)
             self.goals = GoalManager(self.orchestrator.memory.db_manager)
@@ -174,11 +174,33 @@ class SelfManager:
             self.initialize_learning()
         return self.research.create_mission(topic, goal, urls)
 
+    async def collect_research(self, mission_id: str):
+        if self.research is None:
+            self.initialize_learning()
+        return await self.research.collect_mission_sources(mission_id)
+
+    def research_sources_for_mission(self, mission_id: str):
+        if self.research is None:
+            self.initialize_learning()
+        return self.research.mission_urls(mission_id)
+
     async def research_source(self, mission_id: str, topic: str, url: str, claim: str, evidence: str = "", confidence: float = 0.5):
         if self.research is None:
             self.initialize_learning()
         source = await self.research.fetch_source(url)
         return await self.research.ingest_claim(mission_id, source, topic, claim, evidence or source.title, confidence)
+
+    def add_goal_dependency(self, goal_id: str, depends_on_goal_id: str):
+        if self.goals is None:
+            self.initialize_learning()
+        return self.goals.add_dependency(goal_id, depends_on_goal_id)
+
+    def generate_curiosity(self):
+        if self.goals is None:
+            self.initialize_learning()
+        return self.goals.generate_curiosity_from_stale(
+            self.config.self.knowledge_stale_after_days * 86400
+        )
 
     def create_goal(self, title: str, description: str, priority: str = "NORMAL", parent_id: str | None = None, goal_type: str = "user"):
         if self.goals is None:
