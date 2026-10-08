@@ -28,25 +28,56 @@ def db(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_research_provenance_and_duplicate(db):
+async def test_research_provenance_duplicate_and_collection(db):
     engine = ResearchEngine(db, HTTP())
-    mission = engine.create_mission("test", "verify evidence", ["https://example.com"])
+    mission = engine.create_mission(
+        "test", "verify evidence",
+        ["https://example.com", "https://example.org"],
+    )
+    result = await engine.collect_mission_sources(mission["id"])
+    assert result["collected"] == 2
+    assert all(item["status"] == "FETCHED" for item in result["urls"])
+
     source = await engine.fetch_source("https://example.com")
-    first = await engine.ingest_claim(mission["id"], source, "test", "The system works", "evidence")
-    second = await engine.ingest_claim(mission["id"], source, "test", "The system works", "evidence")
+    first = await engine.ingest_claim(
+        mission["id"], source, "test", "The system works", "evidence"
+    )
+    second = await engine.ingest_claim(
+        mission["id"], source, "test", "The system works", "evidence"
+    )
     assert first["status"] == "NEW"
     assert second["status"] == "DUPLICATE"
     assert source.trust == "UNTRUSTED"
 
 
-def test_goals_and_curiosity(db):
+def test_goals_dependencies_and_curiosity(db):
     goals = GoalManager(db)
-    goal = goals.create("Learn", "Research a topic", "HIGH")
-    assert goal["status"] == "PENDING"
-    goals.update(goal["id"], status="ACTIVE", progress=0.5)
-    assert goals.get(goal["id"])["progress"] == 0.5
+    parent = goals.create("Parent", "Base work", "HIGH")
+    child = goals.create("Child", "Dependent work", "NORMAL")
+    goals.add_dependency(child["id"], parent["id"])
+    assert goals.is_ready(child["id"]) is False
+
+    goals.update(parent["id"], status="COMPLETED", progress=1.0)
+    assert goals.is_ready(child["id"]) is True
+
     goals.enqueue_curiosity("SQLite", "Improve memory design")
-    assert goals.pop_curiosity()["topic"] == "SQLite"
+    item = goals.pop_curiosity()
+    assert item["topic"] == "SQLite"
+    assert item["status"] == "CLAIMED"
+    goals.complete_curiosity(item["id"])
+
+
+def test_required_self_schema(db):
+    names = {r[0] for r in db.execute_read(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )}
+    required = {
+        "research_sources", "research_missions", "research_mission_urls",
+        "research_findings", "self_goals", "goal_dependencies",
+        "curiosity_queue", "knowledge_expiry", "self_skill_versions",
+        "self_skill_quarantine",
+    }
+    assert required.issubset(names)
 
 
 def test_research_url_validation():
