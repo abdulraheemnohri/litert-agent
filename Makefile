@@ -1,7 +1,13 @@
-.PHONY: install test lint format build clean
+.PHONY: install install-dev install-browser test lint format build clean
 
 install:
-	pip install -e ".[dev]"
+	python scripts/bootstrap.py
+
+install-dev:
+	python scripts/bootstrap.py --dev
+
+install-browser:
+	python scripts/bootstrap.py --browser
 
 test:
 	pytest -q
