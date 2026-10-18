@@ -13,6 +13,8 @@ A fully local-first autonomous AI agent built in Python. It plans, executes, ver
 - **Crash-resume** — goals are keyed and snapshotted; restart resumes an interrupted task automatically.
 - **Skills system** — 10 built-in skills with validation and a registry, plus user-provided skills.
 - **Self-X** — bounded self-awareness, diagnostics, resource guards, reflection/lesson capture, maintenance proposals, safe evolution proposals, local snapshots, and a dedicated Web/TUI/CLI self-control surface.
+- **Automatic setup** — Windows PowerShell, Linux/macOS/WSL and Termux launchers create an isolated virtual environment and install Python dependencies from requirements manifests.
+- **On-demand runtimes** — services and browser binaries are started/installed only when requested; no blanket installation or boot-time startup of unused runtimes.
 
 ## Subsystems
 
@@ -37,61 +39,45 @@ A fully local-first autonomous AI agent built in Python. It plans, executes, ver
 
 Requires Python 3.12+.
 
-```bash
+**Windows (PowerShell):**
+```powershell
 git clone https://github.com/abdulraheemnohri/litert-agent.git
 cd litert-agent
-pip install -e ".[dev]"        # or: make install / scripts/dev_setup.sh
+.\scripts\install.ps1
 ```
 
-Make sure the LiteRT-LM CLI is installed and available on your `PATH`. litert-agent will not run without it — by design.
+**Linux, macOS, WSL, or Termux:**
+```sh
+git clone https://github.com/abdulraheemnohri/litert-agent.git
+cd litert-agent
+sh scripts/install.sh
+```
+
+Add `--dev` to install test/lint/build dependencies, or `--browser` to install Playwright Chromium. LiteRT-LM CLI must be installed separately for model inference; the installer checks for it but deliberately does not run an unverified OS-specific installer. See [docs/installation.md](docs/installation.md).
 
 ## Usage
 
 ### CLI
 
 ```bash
-# Run an autonomous task
 litert-agent run "Summarize the notes in ./workspace" --profile normal
-
-# Safer, offline variants
 litert-agent run "..." --safe
 litert-agent run "..." --offline
-
-# Interactive chat
 litert-agent chat
-
-# Status, health, doctor
 litert-agent status
 litert-agent health
 litert-agent doctor
-
-# Scheduler (SQLite-backed)
 litert-agent schedule list
 litert-agent schedule add "Daily report" --cron "0 9 * * *"
-litert-agent schedule remove <job-id>
-litert-agent schedule run <job-id>
-
-# Approvals
 litert-agent security list
-litert-agent security decide <request-id> --allow once|session|deny
-
-# Checkpoints and recovery
-litert-agent checkpoint list
-litert-agent checkpoint restore <checkpoint-id>
-
-# Other commands
 litert-agent task list
 litert-agent memory show
 litert-agent skill list
 litert-agent tool list
-litert-agent logs
 litert-agent web
-litert-agent tui --rich
+litert-agent tui
 litert-agent self-test
 litert-agent self status
-litert-agent self diagnose
-litert-agent self maintenance
-litert-agent self snapshot
 litert-agent version
 ```
 
@@ -101,62 +87,34 @@ litert-agent version
 litert-agent web
 ```
 
-Opens the FastAPI server with a 15-page UI including chat, agent monitoring, tasks, approvals (Allow Once / Allow Session / Deny), scheduler, workers, diagnostics, and checkpoints.
+Starts the FastAPI server with the web UI. It is not automatically started during installation.
 
 ### TUI
 
 ```bash
-litert-agent tui        # Textual interface
-litert-agent tui --rich # Rich fallback
+litert-agent tui
+litert-agent tui --rich
 ```
-
-Key bindings: `D` dashboard, `T` tasks, `A` approvals (`O` allow once, `Y` allow session, `X` deny), `S` scheduler, `L` logs, `P` pause, `R` resume, `Q` quit.
 
 ## Crash Recovery
 
-Every autonomous run is keyed by a goal hash. Progress is checkpointed per iteration; if the process crashes, the next run with the same goal resumes from the last checkpoint and publishes a `task_resumed` event. Snapshots are cleared on completion or hard failure and kept on max-iteration exhaustion.
+Every autonomous run is keyed by a goal hash. Progress is checkpointed per iteration; if the process crashes, the next run with the same goal resumes from the last checkpoint and publishes a `task_resumed` event.
 
 ## Configuration
 
-Configuration lives in `~/.litert-agent/config.toml` with three built-in profiles:
-
-- `low-memory` — constrained machines
-- `normal` — balanced defaults
-- `performance` — aggressive settings
-
-See `docs/configuration.md` for all options (loop, memory, scheduler, web).
+Configuration lives in `~/.litert-agent/config.toml`. See `docs/configuration.md` for profiles and options.
 
 ## Documentation
 
-- `docs/architecture.md`
-- `docs/installation.md`
-- `docs/development.md`
-- `docs/cli.md`
-- `docs/tui.md`
-- `docs/web-ui.md`
-- `docs/autonomy.md`
-- `docs/memory.md`
-- `docs/tools.md`
-- `docs/skills.md`
-- `docs/scheduler.md`
-- `docs/security.md`
-- `docs/recovery.md`
-- `docs/runtime.md`
-- `docs/configuration.md`
-- `docs/troubleshooting.md`
-
-## Examples
-
-See `examples/` — quickstart, chat via the Web API, scheduler and approvals demos.
+See `docs/` for architecture, installation, CLI, TUI, web UI, autonomy, memory, tools, skills, scheduler, security, recovery, runtime, configuration, and troubleshooting.
 
 ## Testing
 
 ```bash
-pytest -q        # or: make test / scripts/check.sh
+python scripts/bootstrap.py --dev
+pytest -q
 ruff check src tests
 ```
-
-Unit tests cover cognition, recovery, skills, config, runtime service, chat API, scheduler, approvals, and crash-recovery integration. Integration tests cover the API and the full loop with a scripted fake provider. CI runs lint, tests and a wheel build on every push.
 
 ## Contributing
 
@@ -168,8 +126,7 @@ MIT — see `LICENSE`.
 
 ## Project Status
 
-Work in progress; see `CHANGELOG.md` for the latest changes.
-
+Work in progress; see `CHANGELOG.md`.
 
 ## Self-X
 
