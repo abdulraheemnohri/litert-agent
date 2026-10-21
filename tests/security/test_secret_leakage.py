@@ -15,6 +15,14 @@ def test_sanitizer_redacts_api_keys():
     assert "[REDACTED_SECRET]" in sanitized
 
 
+def test_sanitizer_redacts_prefixed_environment_credentials():
+    text = "OPENAI_API_KEY=provider-secret-123 DATABASE_PASSWORD=db-secret-456"
+    sanitized = SecretSanitizer.sanitize(text)
+    assert "provider-secret-123" not in sanitized
+    assert "db-secret-456" not in sanitized
+    assert sanitized.count("[REDACTED_SECRET]") == 2
+
+
 def test_sanitizer_redacts_json_and_yaml_credentials():
     text = '{"api_key": "json-secret-123", "client_secret": "client-secret-456"}'
     sanitized = SecretSanitizer.sanitize(text)
