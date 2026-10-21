@@ -2,15 +2,16 @@
 
 import re
 
-# Match common credential labels in environment files, Python-like assignments,
-# and JSON/YAML-style key/value text. Preserve the label and delimiters while
-# replacing only the credential value.
+# Match credential labels in environment variables, Python-like assignments,
+# and JSON/YAML-style key/value text. Allow prefixed names such as
+# OPENAI_API_KEY and DATABASE_PASSWORD.
 _SECRET_ASSIGNMENT = re.compile(
     r"""(?ix)
     (?P<prefix>
-        \b(?:api[-_]?key|access[-_]?token|refresh[-_]?token|auth[-_]?token|
-        client[-_]?secret|password|passwd|secret|credential)\b
-        ["']?\s*[:=]\s*["']?
+        (?:\b|_)
+        (?:api[-_]?key|access[-_]?token|refresh[-_]?token|auth[-_]?token|
+        client[-_]?secret|password|passwd|secret|credential)
+        \b["']?\s*[:=]\s*["']?
     )
     (?P<value>[^"'\x60\s,;}\]]+)
     """
