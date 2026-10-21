@@ -2,6 +2,7 @@
 
 Secrets must never survive into logs, ordinary memory, knowledge or UI text.
 """
+
 from litert_agent.security.secrets import SecretSanitizer
 from litert_agent.research.missions import ResearchStore
 from litert_agent.self.learning import LearningEngine
@@ -12,6 +13,29 @@ def test_sanitizer_redacts_api_keys():
     sanitized = SecretSanitizer.sanitize(text)
     assert "super-secret-value-123" not in sanitized
     assert "[REDACTED_SECRET]" in sanitized
+
+
+def test_sanitizer_redacts_prefixed_environment_credentials():
+    text = "OPENAI_API_KEY=provider-secret-123 DATABASE_PASSWORD=db-secret-456"
+    sanitized = SecretSanitizer.sanitize(text)
+    assert "provider-secret-123" not in sanitized
+    assert "db-secret-456" not in sanitized
+    assert sanitized.count("[REDACTED_SECRET]") == 2
+
+
+def test_sanitizer_redacts_json_and_yaml_credentials():
+    text = '{"api_key": "json-secret-123", "client_secret": "client-secret-456"}'
+    sanitized = SecretSanitizer.sanitize(text)
+    assert "json-secret-123" not in sanitized
+    assert "client-secret-456" not in sanitized
+    assert sanitized.count("[REDACTED_SECRET]") == 2
+
+
+def test_sanitizer_redacts_bearer_authorization_values():
+    text = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.secret.signature"
+    sanitized = SecretSanitizer.sanitize(text)
+    assert "eyJhbGciOiJIUzI1NiJ9.secret.signature" not in sanitized
+    assert "Bearer [REDACTED_SECRET]" in sanitized
 
 
 def test_sanitizer_idempotent_on_clean_text():
@@ -37,8 +61,12 @@ def test_research_knowledge_holds_no_secrets_after_sanitization(tmp_path):
 
 def test_lessons_hold_no_secrets_after_sanitization(tmp_path):
     le = LearningEngine(tmp_path / "sec.db")
-    le.record_experience("deploy", "failed", tools=["terminal"],
-                         errors=[SecretSanitizer.sanitize("api_key = leak-me-now")])
+    le.record_experience(
+        "deploy",
+        "failed",
+        tools=["terminal"],
+        errors=[SecretSanitizer.sanitize("api_key = leak-me-now")],
+    )
     for lesson in le.list_lessons():
         assert "leak-me-now" not in lesson["lesson"]
     le.close()
